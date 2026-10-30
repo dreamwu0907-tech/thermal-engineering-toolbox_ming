@@ -24,6 +24,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          # npm cache is intentionally disabled because this repository has no lockfile.
       - name: Install dependencies
         run: npm install
       - name: Build
