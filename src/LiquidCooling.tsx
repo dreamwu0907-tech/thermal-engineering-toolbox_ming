@@ -89,7 +89,8 @@ export default function LiquidCooling() {
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
       const dp=frictionFactor(re,Math.min(w,h)/Math.max(w,h))*(len/dh)*(rho*v*v/2)+(2+(channelType==="serpentine"?Math.max(0,n-1)*1.5:0))*(rho*v*v/2);
       const areaWet=branches*2*((w+h)/1000)*len;
-      const overlapArea=Math.min((chipL/1000)*(chipW/1000),(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));\n      const rtim=(timT/1000)/(timK*overlapArea);
+      const overlapArea=Math.min((chipL/1000)*(chipW/1000),(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));
+      const rtim=(timT/1000)/(timK*overlapArea);
       const rbase=(baseT/1000)/(copperK*((chipL/1000)*(chipW/1000)));
       const rt=rjc+rtim+rbase+1/Math.max(ht*areaWet,1e-9);
       const out=testTin+power/(rho*(testFlow/60000)*cp);
