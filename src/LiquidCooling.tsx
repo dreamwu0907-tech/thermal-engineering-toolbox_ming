@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 type FlowResult = {
-  flow: number; velocity: number; reynolds: number; h: number; pressure: number;
+  flow: number; inlet: number; velocity: number; reynolds: number; h: number; pressure: number;
   outlet: number; tj: number; rTotal: number; feasible: boolean;
 };
 const copperK = 390;
@@ -100,7 +100,7 @@ export default function LiquidCooling() {
       if(objective==="thermal")return a.flow.tj-b.flow.tj;
       if(objective==="pressure")return a.flow.pressure-b.flow.pressure;
       if(objective==="compact")return a.h-b.h;
-      const score=(x:typeof a)=>((x.flow.tj-tin)/(Math.max(tjMax-tin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
+      const score=(x:typeof a)=>((x.flow.tj-testTin)/(Math.max(tjMax-testTin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
   },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMin]);
