@@ -7,9 +7,9 @@ type FlowResult = {
 };
 const copperK = 390;
 const frictionFactor = (re:number, aspect:number) => {\n  if (re <= 0) return 0;\n  if (re < 2300) { const a=Math.min(1,Math.max(0,aspect)); const poiseuille=96*(1-1.3553*a+1.9467*a*a-1.7012*a*a*a+0.9564*a*a*a*a-0.2537*a*a*a*a*a); return poiseuille/re; }\n  return 0.3164/Math.pow(re,0.25);\n};
-const nusselt = (re:number, pr:number) => {
+const nusselt = (re:number, pr:number, aspect:number) => {
   if (re < 2300) return 4.36;
-  const f = frictionFactor(re);
+  const f = frictionFactor(re,aspect);
   const numerator = (f/8)*(re-1000)*pr;
   const denominator = 1 + 12.7*Math.sqrt(f/8)*(Math.pow(pr,2/3)-1);
   return Math.max(4.36, numerator/Math.max(denominator,0.1));
@@ -43,7 +43,7 @@ export default function LiquidCooling() {
       const area=channelW/1000*channelH/1000;
       const velocity=q/(branchCount*area);
       const dh=2*(channelW/1000)*(channelH/1000)/((channelW+channelH)/1000);
-      const re=rho*velocity*dh/mu, pr=cp*mu/coolantK, nu=nusselt(re,pr), h=nu*coolantK/dh;
+      const re=rho*velocity*dh/mu, pr=cp*mu/coolantK, nu=nusselt(re,pr,Math.min(channelW,channelH)/Math.max(channelW,channelH)), h=nu*coolantK/dh;
       const length=channelType==="parallel"?plateL/1000:(channelCount*plateL+(channelCount-1)*plateW)/1000;
       const f=frictionFactor(re,Math.min(channelW,channelH)/Math.max(channelW,channelH));
       const straight=f*(length/dh)*(rho*velocity*velocity/2);
@@ -71,7 +71,7 @@ export default function LiquidCooling() {
     for(const w of widths)for(const h of heights)for(const n of counts){
       if(n*w+(n-1)*finT>plateW)continue;
       const branches=channelType==="parallel"?n:1, area=w/1000*h/1000, v=(testFlow/60000)/(branches*area), dh=2*(w/1000)*(h/1000)/((w+h)/1000);
-      const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr)*coolantK/dh;
+      const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr,Math.min(w,h)/Math.max(w,h))*coolantK/dh;
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
       const dp=frictionFactor(re,Math.min(w,h)/Math.max(w,h))*(len/dh)*(rho*v*v/2)+(2+(channelType==="serpentine"?Math.max(0,n-1)*1.5:0))*(rho*v*v/2);
       const areaWet=branches*2*((w+h)/1000)*(plateL/1000);
