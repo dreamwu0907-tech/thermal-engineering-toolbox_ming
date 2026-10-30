@@ -76,7 +76,6 @@ export default function LiquidCooling() {
     return results;
   },[validInputs,flowMin,flowMax,flowStep,tempMode,tempMin,tempMax,tempStep,tin,channelType,channelCount,channelW,channelH,finT,plateL,plateW,rho,cp,mu,coolantK,power,tjMax,chipL,chipW,contactL,contactW,coldContactL,coldContactW,timT,timK,rjc,baseT]);
   const best=flowResults.filter(r=>r.feasible).sort((a,b)=>a.pressure-b.pressure)[0];
-  const maxCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
   const optimization=useMemo(()=>{
     if(!validInputs)return [];
     const candidates:{w:number;h:number;n:number;fin:number;base:number;flow:FlowResult}[]=[];
