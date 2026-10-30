@@ -55,12 +55,13 @@ export default function LiquidCooling() {
   const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&(tempMode!=="sweep"||(tempMin<=tempMax&&tempStep>0))&&channelW>0&&channelH>0&&channelCount>=1&&finT>0&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
   const fitWidth=channelCount*channelW+(channelCount-1)*finT;
   const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
+  const preInputsValid=power>0&&chipL>0&&chipW>0&&tjMax>0&&rjc>=0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timT>=0&&timK>0&&rho>0&&cp>0;
   const preThermalResults=useMemo<PreThermalResult[]>(()=>{
     const tins=scanValues(preTinMin,preTinMax,preTinStep,80);
     const flows=scanValues(preFlowMin,preFlowMax,preFlowStep,120);
     const chipArea=(chipL/1000)*(chipW/1000);
     const contactArea=Math.min(chipArea,(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));
-    if(!validInputs||tins.length===0||flows.length===0||contactArea<=0)return [];
+    if(!preInputsValid||tins.length===0||flows.length===0||contactArea<=0)return [];
     const rTim=(timT/1000)/(timK*contactArea);
     const upstreamResistance=rjc+rTim;
     const rows:PreThermalResult[]=[];
@@ -72,18 +73,25 @@ export default function LiquidCooling() {
       rows.push({inlet,flow,coolantRise,meanCoolant,rcpBudget,feasible:rcpBudget>0});
     }
     return rows;
-  },[validInputs,preTinMin,preTinMax,preTinStep,preFlowMin,preFlowMax,preFlowStep,chipL,chipW,contactL,contactW,coldContactL,coldContactW,timT,timK,rjc,rho,cp,power,tjMax]);
+  },[preInputsValid,preTinMin,preTinMax,preTinStep,preFlowMin,preFlowMax,preFlowStep,chipL,chipW,contactL,contactW,coldContactL,coldContactW,timT,timK,rjc,rho,cp,power,tjMax]);
   const preSizeResults=useMemo(()=>{
     const lengths=scanValues(preLengthMin,preLengthMax,preLengthStep,80);
     const widths=scanValues(preWidthMin,preWidthMax,preWidthStep,80);
     const heights=scanValues(preHeightMin,preHeightMax,preHeightStep,80);
     const rows:{length:number;width:number;height:number;volume:number}[]=[];
-    for(const length of lengths)for(const width of widths)for(const height of heights) {
-      rows.push({length,width,height,volume:length*width*height});
+    for(const length of lengths) {
+      for(const width of widths) {
+        for(const height of heights) {
+          if(rows.length>=5000)break;
+          rows.push({length,width,height,volume:length*width*height});
+        }
+        if(rows.length>=5000)break;
+      }
       if(rows.length>=5000)break;
     }
     return rows.sort((a,b)=>a.volume-b.volume).slice(0,10);
   },[preLengthMin,preLengthMax,preLengthStep,preWidthMin,preWidthMax,preWidthStep,preHeightMin,preHeightMax,preHeightStep]);
+  const preSizeCandidateCount=Math.min(5000,scanValues(preLengthMin,preLengthMax,preLengthStep,80).length*scanValues(preWidthMin,preWidthMax,preWidthStep,80).length*scanValues(preHeightMin,preHeightMax,preHeightStep,80).length);
   const preFeasibleCount=preThermalResults.filter(r=>r.feasible).length;
   const bestPreBudget=preThermalResults.filter(r=>r.feasible).sort((a,b)=>b.rcpBudget-a.rcpBudget)[0];
   const flowResults=useMemo<FlowResult[]>(()=>{
@@ -186,7 +194,7 @@ export default function LiquidCooling() {
         <div><small>冷卻條件組合</small><b>{preThermalResults.length}</b><span>temperature × flow</span></div>
         <div><small>正熱阻預算組合</small><b>{preFeasibleCount}</b><span>not yet geometry-validated</span></div>
         <div><small>最大可用冷板熱阻預算</small><b>{bestPreBudget?bestPreBudget.rcpBudget.toFixed(4):"—"}</b><span>K/W · {bestPreBudget?bestPreBudget.inlet.toFixed(0)+"°C / "+bestPreBudget.flow.toFixed(2)+" LPM":"no feasible condition"}</span></div>
-        <div><small>外型尺寸候選</small><b>{preSizeResults.length}</b><span>smallest volume candidates</span></div>
+        <div><small>外型尺寸組合</small><b>{preSizeCandidateCount}</b><span>top 10 by volume shown</span></div>
       </div>
       {preThermalResults.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Inlet<br/>°C</th><th>Flow<br/>LPM</th><th>Coolant ΔT<br/>°C</th><th>Mean coolant<br/>°C</th><th>Available cold plate Rth<br/>K/W</th><th>Thermal budget</th></tr></thead><tbody>{preThermalResults.slice(0,100).map((r,i)=><tr key={i}><td>{r.inlet.toFixed(1)}</td><td>{r.flow.toFixed(2)}</td><td>{r.coolantRise.toFixed(2)}</td><td>{r.meanCoolant.toFixed(2)}</td><td>{r.rcpBudget.toFixed(4)}</td><td><span className={r.feasible?"lc-pass":"lc-fail"}>{r.feasible?"Positive budget":"Infeasible"}</span></td></tr>)}</tbody></table></div>:<p className="lc-note">請確認晶片、接觸條件、冷卻液物性與掃描範圍皆有效。</p>}
       <div className="lc-table-wrap" style={{marginTop:18}}><table className="lc-table"><thead><tr><th>Rank</th><th>Plate Length</th><th>Plate Width</th><th>Plate Height</th><th>Envelope Volume</th></tr></thead><tbody>{preSizeResults.map((r,i)=><tr key={i}><td>{i+1}</td><td>{r.length} mm</td><td>{r.width} mm</td><td>{r.height} mm</td><td>{(r.volume/1000).toFixed(1)} cm³</td></tr>)}</tbody></table></div>
