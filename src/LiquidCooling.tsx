@@ -79,8 +79,8 @@ export default function LiquidCooling() {
   const maxCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
   const optimization=useMemo(()=>{
     if(!validInputs)return [];
-    const candidates:{w:number;h:number;n:number;flow:FlowResult}[]=[];
-    const widths=[channelW*0.75,channelW,channelW*1.25], heights=[channelH*0.75,channelH,channelH*1.25], counts=[Math.max(2,channelCount-2),channelCount,channelCount+2];
+    const candidates:{w:number;h:number;n:number;fin:number;base:number;flow:FlowResult}[]=[];
+    const widths=[channelW*0.75,channelW,channelW*1.25], heights=[channelH*0.75,channelH,channelH*1.25], counts=[Math.max(2,channelCount-2),channelCount,channelCount+2], fins=[Math.max(minFinT,finT*0.75),finT,finT*1.25], bases=[Math.max(minWall,baseT*0.75),baseT,baseT*1.25];
     const testFlow=flowMin, testTin=tempMode==="fixed"?tin:tempMax;
     for(const w of widths)for(const h of heights)for(const n of counts){
       if(n*w+(n-1)*finT>plateW||w<minChannelW||finT<minFinT||bottomWall<minWall||h>maxChannelDepth||(process==="cnc"&&toolRadius*2>w))continue;
@@ -91,18 +91,18 @@ export default function LiquidCooling() {
       const areaWet=branches*2*((w+h)/1000)*len;
       const overlapArea=Math.min((chipL/1000)*(chipW/1000),(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));
       const rtim=(timT/1000)/(timK*overlapArea);
-      const rbase=(baseT/1000)/(copperK*((chipL/1000)*(chipW/1000)));
+      const rbase=(base/1000)/(copperK*((chipL/1000)*(chipW/1000)));
       const rt=rjc+rtim+rbase+1/Math.max(ht*areaWet,1e-9);
       const out=testTin+power/(rho*(testFlow/60000)*cp);
       const tj=(testTin+out)/2+power*rt;
-      candidates.push({w,h,n,flow:{flow:testFlow,inlet:testTin,velocity:v,reynolds:re,h:ht,pressure:dp,tj,outlet:out,rTotal:rt,feasible:tj<=tjMax}});
+      candidates.push({w,h,n,fin,base,flow:{flow:testFlow,inlet:testTin,velocity:v,reynolds:re,h:ht,pressure:dp,tj,outlet:out,rTotal:rt,feasible:tj<=tjMax}});
     }
     const viable=candidates.filter(c=>c.flow.feasible);
     const pool=viable.length?viable:candidates;
     return pool.sort((a,b)=>{
       if(objective==="thermal")return a.flow.tj-b.flow.tj;
       if(objective==="pressure")return a.flow.pressure-b.flow.pressure;
-      if(objective==="compact")return a.h-b.h;
+      if(objective==="compact")return (a.base+a.h+bottomWall)-(b.base+b.h+bottomWall);
       const score=(x:typeof a)=>((x.flow.tj-testTin)/(Math.max(tjMax-testTin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
@@ -155,8 +155,8 @@ export default function LiquidCooling() {
     </Card>
     <div className="lc-stage"><span>02</span><div><b>Design Optimization</b><small>尺寸搜尋與方案比較</small></div><span className="lc-stage-active">BETA</span></div>
     <Card title="尺寸優化" kicker="PARAMETRIC DESIGN SEARCH"><div className="lc-opt-head"><Choice label="優化目標" value={objective} onChange={v=>{setObjective(v);setOptimized(true)}} options={[["balanced","Balanced 平衡熱性能與壓降"],["thermal","Thermal Priority 熱性能優先"],["pressure","Low Pressure Drop 低壓降優先"],["compact","Compact Design 緊湊尺寸"]]}/><button className="lc-primary" onClick={()=>setOptimized(true)}>執行尺寸搜尋</button></div>
-      <p className="lc-note">以目前幾何為中心，掃描流道寬、高及數量的鄰近組合；先篩選 Tj，再依所選目標排序。搜尋流量採最低掃描流量，方便檢查低流量下的設計風險。</p>
-      {optimized&&optimization.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Rank</th><th>Channel W</th><th>Channel H</th><th>Count</th><th>Tj est.</th><th>Cold plate ΔP</th><th>Result</th></tr></thead><tbody>{optimization.map((c,i)=><tr key={i}><td>{i+1}</td><td>{c.w.toFixed(2)} mm</td><td>{c.h.toFixed(2)} mm</td><td>{c.n}</td><td>{c.flow.tj.toFixed(1)} °C</td><td>{(c.flow.pressure/1000).toFixed(2)} kPa</td><td>{c.flow.feasible?"Within Tj":"No feasible Tj"}</td></tr>)}</tbody></table></div>:optimized?<p className="lc-note">目前加工寬度限制下沒有可搜尋的幾何組合，請調整流道尺寸或冷板寬度。</p>:null}
+      <p className="lc-note">以目前幾何為中心，掃描流道寬、高、數量、鰭片厚度與底板厚度的鄰近組合；先篩選 Tj，再依所選目標排序。搜尋流量採最低掃描流量，方便檢查低流量下的設計風險。</p>
+      {optimized&&optimization.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Rank</th><th>Channel W</th><th>Channel H</th><th>Fin T</th><th>Base T</th><th>Count</th><th>Tj est.</th><th>Cold plate ΔP</th><th>Result</th></tr></thead><tbody>{optimization.map((c,i)=><tr key={i}><td>{i+1}</td><td>{c.w.toFixed(2)} mm</td><td>{c.h.toFixed(2)} mm</td><td>{c.fin.toFixed(2)} mm</td><td>{c.base.toFixed(2)} mm</td><td>{c.n}</td><td>{c.flow.tj.toFixed(1)} °C</td><td>{(c.flow.pressure/1000).toFixed(2)} kPa</td><td>{c.flow.feasible?"Within Tj":"No feasible Tj"}</td></tr>)}</tbody></table></div>:optimized?<p className="lc-note">目前加工寬度限制下沒有可搜尋的幾何組合，請調整流道尺寸或冷板寬度。</p>:null}
     </Card>
     <Card title="系統壓降與泵浦選型需求" kicker="SYSTEM PRESSURE ESTIMATE"><div className="lc-summary lc-summary-three">
       <div><small>中位流量冷板壓降</small><b>{selected?(selected.pressure/1000).toFixed(2):"—"}</b><span>kPa</span></div>
