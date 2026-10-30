@@ -106,7 +106,7 @@ export default function LiquidCooling() {
       const score=(x:typeof a)=>((x.flow.tj-testTin)/(Math.max(tjMax-testTin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
-  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMax,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
+  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,coldContactL,coldContactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMax,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
   const selected=flowResults.length?flowResults[Math.floor(flowResults.length/2)]:undefined;
   return <main className="lc-shell">
     <header className="lc-hero"><div><p className="lc-eyebrow">THERMAL ENGINEERING TOOLBOX / LIQUID COOLING</p><h1>水冷板初步設計工作台</h1><p>從晶片熱負載、冷板空間與冷卻液物性出發，初步評估流道配置、熱性能與系統壓降需求。</p></div><div className="lc-version">PRELIMINARY<br/>DESIGN / V1</div></header>
