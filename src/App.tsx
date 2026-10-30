@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import LiquidCooling from "./LiquidCooling";
+
+import { useMemo, useState } from "react";
 
 type Material = { label: string; k: number; density: number };
 const materials: Record<string, Material> = {
@@ -13,7 +16,7 @@ function NumberField({ label, value, unit, onChange, step = 1 }: { label: string
 function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string,string][] }) {
   return <label className="field"><span>{label}</span><select className="select-input" value={value} onChange={e => onChange(e.target.value)}>{options.map(([v,t]) => <option value={v} key={v}>{t}</option>)}</select></label>;
 }
-export default function App() {
+function AirCooling() {
   const [power,setPower]=useState(500), [tjMax,setTjMax]=useState(85), [tin,setTin]=useState(35);
   const [chipL,setChipL]=useState(40), [chipW,setChipW]=useState(40), [rjc,setRjc]=useState(0.015);
   const [timT,setTimT]=useState(0.1), [timK,setTimK]=useState(5);
@@ -82,3 +85,16 @@ export default function App() {
     <footer><span>THERMAL ENGINEERING TOOLBOX</span><span>Single-source forced-air design · v0.2.0</span></footer>
   </main>;
 }
+
+
+export default function App() {
+  const [module, setModule] = useState<"air" | "liquid">("liquid");
+  return <main className="app-root">
+    <nav className="module-nav" aria-label="Thermal design modules">
+      <button className={module === "liquid" ? "module-tab active" : "module-tab"} onClick={() => setModule("liquid")}>液冷水冷板</button>
+      <button className={module === "air" ? "module-tab active" : "module-tab"} onClick={() => setModule("air")}>風冷散熱器</button>
+    </nav>
+    {module === "liquid" ? <LiquidCooling /> : <AirCooling />}
+  </main>;
+}
+
