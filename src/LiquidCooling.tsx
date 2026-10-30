@@ -6,7 +6,15 @@ type FlowResult = {
   outlet: number; tj: number; rTotal: number; feasible: boolean;
 };
 const copperK = 390;
-const frictionFactor = (re:number, aspect:number) => {\n  if (re <= 0) return 0;\n  if (re < 2300) { const a=Math.min(1,Math.max(0,aspect)); const poiseuille=96*(1-1.3553*a+1.9467*a*a-1.7012*a*a*a+0.9564*a*a*a*a-0.2537*a*a*a*a*a); return poiseuille/re; }\n  return 0.3164/Math.pow(re,0.25);\n};
+const frictionFactor = (re:number, aspect:number) => {
+  if (re <= 0) return 0;
+  if (re < 2300) {
+    const a=Math.min(1,Math.max(0,aspect));
+    const poiseuille=96*(1-1.3553*a+1.9467*a*a-1.7012*a*a*a+0.9564*a*a*a*a-0.2537*a*a*a*a*a);
+    return poiseuille/re;
+  }
+  return 0.3164/Math.pow(re,0.25);
+};
 const nusselt = (re:number, pr:number, aspect:number) => {
   if (re < 2300) return 4.36;
   const f = frictionFactor(re,aspect);
