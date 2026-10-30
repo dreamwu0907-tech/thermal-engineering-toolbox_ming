@@ -82,8 +82,8 @@ export default function LiquidCooling() {
     const candidates:{w:number;h:number;n:number;fin:number;base:number;flow:FlowResult}[]=[];
     const widths=[channelW*0.75,channelW,channelW*1.25], heights=[channelH*0.75,channelH,channelH*1.25], counts=[Math.max(2,channelCount-2),channelCount,channelCount+2], fins=[Math.max(minFinT,finT*0.75),finT,finT*1.25], bases=[Math.max(minWall,baseT*0.75),baseT,baseT*1.25];
     const testFlow=flowMin, testTin=tempMode==="fixed"?tin:tempMax;
-    for(const w of widths)for(const h of heights)for(const n of counts){
-      if(n*w+(n-1)*finT>plateW||w<minChannelW||finT<minFinT||bottomWall<minWall||h>maxChannelDepth||(process==="cnc"&&toolRadius*2>w))continue;
+    for(const w of widths)for(const h of heights)for(const n of counts)for(const fin of fins)for(const base of bases){
+      if(n*w+(n-1)*fin>plateW||w<minChannelW||fin<minFinT||base<minWall||bottomWall<minWall||h>maxChannelDepth||(process==="cnc"&&toolRadius*2>w))continue;
       const branches=channelType==="parallel"?n:1, area=w/1000*h/1000, v=(testFlow/60000)/(branches*area), dh=2*(w/1000)*(h/1000)/((w+h)/1000);
       const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr,Math.min(w,h)/Math.max(w,h))*coolantK/dh;
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
