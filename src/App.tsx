@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import LiquidCooling from "./LiquidCooling";
 
-import { useMemo, useState } from "react";
-
 type Material = { label: string; k: number; density: number };
 const materials: Record<string, Material> = {
   al6063: { label: "Aluminum 6063", k: 200, density: 2700 },
