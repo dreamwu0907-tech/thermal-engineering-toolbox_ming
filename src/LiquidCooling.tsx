@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
+import type { ReactNode } from "react";
 
 type FlowResult = {
   flow: number; velocity: number; reynolds: number; h: number; pressure: number;
   outlet: number; tj: number; rTotal: number; feasible: boolean;
 };
 const copperK = 390;
-const clamp = (n:number, lo:number, hi:number) => Math.min(hi, Math.max(lo,n));
-const frictionFactor = (re:number) => re <= 0 ? 0 : re < 2300 ? 64/re : re < 4000 ? 0.3164/Math.pow(4000,0.25) : 0.3164/Math.pow(re,0.25);
+const frictionFactor = (re:number, aspect:number) => {\n  if (re <= 0) return 0;\n  if (re < 2300) { const a=Math.min(1,Math.max(0,aspect)); const poiseuille=96*(1-1.3553*a+1.9467*a*a-1.7012*a*a*a+0.9564*a*a*a*a-0.2537*a*a*a*a*a); return poiseuille/re; }\n  return 0.3164/Math.pow(re,0.25);\n};
 const nusselt = (re:number, pr:number) => {
   if (re < 2300) return 4.36;
   const f = frictionFactor(re);
@@ -20,7 +20,7 @@ function Field({label,value,unit,onChange,step=1,min=0}:{label:string;value:numb
 function Choice({label,value,onChange,options}:{label:string;value:string;onChange:(v:string)=>void;options:[string,string][]}) {
   return <label className="lc-field"><span>{label}</span><select value={value} onChange={e=>onChange(e.target.value)}>{options.map(([v,t])=><option key={v} value={v}>{t}</option>)}</select></label>;
 }
-function Card({title,kicker,children}:{title:string;kicker:string;children:React.ReactNode}) {
+function Card({title,kicker,children}:{title:string;kicker:string;children:ReactNode}) {
   return <section className="lc-card"><div className="lc-card-head"><div><small>{kicker}</small><h3>{title}</h3></div></div>{children}</section>;
 }
 export default function LiquidCooling() {
@@ -45,7 +45,7 @@ export default function LiquidCooling() {
       const dh=2*(channelW/1000)*(channelH/1000)/((channelW+channelH)/1000);
       const re=rho*velocity*dh/mu, pr=cp*mu/coolantK, nu=nusselt(re,pr), h=nu*coolantK/dh;
       const length=channelType==="parallel"?plateL/1000:(channelCount*plateL+(channelCount-1)*plateW)/1000;
-      const f=frictionFactor(re);
+      const f=frictionFactor(re,Math.min(channelW,channelH)/Math.max(channelW,channelH));
       const straight=f*(length/dh)*(rho*velocity*velocity/2);
       const turns=channelType==="serpentine"?Math.max(0,channelCount-1):0;
       const kMinor=2+turns*1.5;
@@ -73,7 +73,7 @@ export default function LiquidCooling() {
       const branches=channelType==="parallel"?n:1, area=w/1000*h/1000, v=(testFlow/60000)/(branches*area), dh=2*(w/1000)*(h/1000)/((w+h)/1000);
       const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr)*coolantK/dh;
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
-      const dp=frictionFactor(re)*(len/dh)*(rho*v*v/2)+(2+(channelType==="serpentine"?Math.max(0,n-1)*1.5:0))*(rho*v*v/2);
+      const dp=frictionFactor(re,Math.min(w,h)/Math.max(w,h))*(len/dh)*(rho*v*v/2)+(2+(channelType==="serpentine"?Math.max(0,n-1)*1.5:0))*(rho*v*v/2);
       const areaWet=branches*2*((w+h)/1000)*(plateL/1000);
       const rtim=(timT/1000)/(timK*((contactL/1000)*(contactW/1000)));
       const rbase=(baseT/1000)/(copperK*((chipL/1000)*(chipW/1000)));
@@ -87,7 +87,7 @@ export default function LiquidCooling() {
     return pool.sort((a,b)=>{
       if(objective==="thermal")return a.flow.tj-b.flow.tj;
       if(objective==="pressure")return a.flow.pressure-b.flow.pressure;
-      if(objective==="compact")return (a.h*a.n)-(b.h*b.n);
+      if(objective==="compact")return a.h-b.h;
       const score=(x:typeof a)=>((x.flow.tj-tin)/(Math.max(tjMax-tin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
@@ -111,7 +111,7 @@ export default function LiquidCooling() {
         <Field label="鰭片厚度／間隔壁" value={finT} unit="mm" step={0.1} onChange={setFinT}/><Field label="流道數量／蛇形通道數" value={channelCount} unit="channels" onChange={setChannelCount}/>
         <Choice label="流道形式" value={channelType} onChange={setChannelType} options={[["parallel","Parallel 並聯流道"],["serpentine","Serpentine 蛇形流道"]]}/>
         <Choice label="製程" value={process} onChange={setProcess} options={[["cnc","CNC Machining"],["skived","Skived Fin 鏟齒"]]}/>
-      </div><div className={fitWidth<=plateW?"lc-fit":"lc-fit warning"}>流道配置寬度估算：{fitWidth.toFixed(1)} mm / 冷板寬度 {plateW} mm {fitWidth<=plateW?"· 幾何初步符合":"· 超出冷板寬度，請調整流道數或尺寸"}</div></Card>
+      </div><div className={fitWidth<=plateW?"lc-fit":"lc-fit warning"}>流道配置寬度估算：{fitWidth.toFixed(1)} mm / 冷板寬度 {plateW} mm · 冷板總厚度估算：{(baseT+channelH+bottomWall).toFixed(1)} mm {fitWidth<=plateW?"· 幾何初步符合":"· 超出冷板寬度，請調整流道數或尺寸"}</div></Card>
       <Card title="冷卻液自訂物性" kicker="COOLANT PROPERTIES"><div className="lc-fields">
         <Field label="入液溫度" value={tin} unit="°C" onChange={setTin}/><Field label="Density" value={rho} unit="kg/m³" onChange={setRho}/>
         <Field label="Specific Heat Cp" value={cp} unit="J/kg·K" onChange={setCp}/><Field label="Dynamic Viscosity μ" value={mu} unit="Pa·s" step={0.00001} onChange={setMu}/>
