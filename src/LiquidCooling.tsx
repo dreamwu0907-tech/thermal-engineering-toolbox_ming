@@ -41,7 +41,7 @@ export default function LiquidCooling() {
   const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);
   const [minChannelW,setMinChannelW]=useState(0.8),[minFinT,setMinFinT]=useState(0.3),[minWall,setMinWall]=useState(0.8),[maxChannelDepth,setMaxChannelDepth]=useState(8),[toolRadius,setToolRadius]=useState(0.5);
   const [systemExtra,setSystemExtra]=useState(30),[objective,setObjective]=useState("balanced"),[optimized,setOptimized]=useState(false);
-  const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&tempMin<=tempMax&&tempStep>0&&channelW>0&&channelH>0&&channelCount>=1&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
+  const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&(tempMode!=="sweep"||(tempMin<=tempMax&&tempStep>0))&&channelW>0&&channelH>0&&channelCount>=1&&finT>0&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
   const fitWidth=channelCount*channelW+(channelCount-1)*finT;
   const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
   const flowResults=useMemo<FlowResult[]>(()=>{
@@ -81,7 +81,7 @@ export default function LiquidCooling() {
     if(!validInputs)return [];
     const candidates:{w:number;h:number;n:number;flow:FlowResult}[]=[];
     const widths=[channelW*0.75,channelW,channelW*1.25], heights=[channelH*0.75,channelH,channelH*1.25], counts=[Math.max(2,channelCount-2),channelCount,channelCount+2];
-    const testFlow=flowMin, testTin=tempMode==="fixed"?tin:tempMin;
+    const testFlow=flowMin, testTin=tempMode==="fixed"?tin:tempMax;
     for(const w of widths)for(const h of heights)for(const n of counts){
       if(n*w+(n-1)*finT>plateW||w<minChannelW||finT<minFinT||bottomWall<minWall||h>maxChannelDepth||(process==="cnc"&&toolRadius*2>w))continue;
       const branches=channelType==="parallel"?n:1, area=w/1000*h/1000, v=(testFlow/60000)/(branches*area), dh=2*(w/1000)*(h/1000)/((w+h)/1000);
@@ -106,7 +106,7 @@ export default function LiquidCooling() {
       const score=(x:typeof a)=>((x.flow.tj-testTin)/(Math.max(tjMax-testTin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
-  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMin,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
+  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMax,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
   const selected=flowResults.length?flowResults[Math.floor(flowResults.length/2)]:undefined;
   return <main className="lc-shell">
     <header className="lc-hero"><div><p className="lc-eyebrow">THERMAL ENGINEERING TOOLBOX / LIQUID COOLING</p><h1>水冷板初步設計工作台</h1><p>從晶片熱負載、冷板空間與冷卻液物性出發，初步評估流道配置、熱性能與系統壓降需求。</p></div><div className="lc-version">PRELIMINARY<br/>DESIGN / V1</div></header>
