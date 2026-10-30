@@ -38,10 +38,12 @@ export default function LiquidCooling() {
   const [rho,setRho]=useState(997),[cp,setCp]=useState(4180),[mu,setMu]=useState(0.00089),[coolantK,setCoolantK]=useState(0.6);
   const [channelType,setChannelType]=useState("parallel"),[process,setProcess]=useState("cnc");
   const [plateL,setPlateL]=useState(50),[plateW,setPlateW]=useState(50),[baseT,setBaseT]=useState(5),[channelH,setChannelH]=useState(2),[bottomWall,setBottomWall]=useState(1.5);
-  const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);\n  const [minChannelW,setMinChannelW]=useState(0.8),[minFinT,setMinFinT]=useState(0.3),[minWall,setMinWall]=useState(0.8),[maxChannelDepth,setMaxChannelDepth]=useState(8),[toolRadius,setToolRadius]=useState(0.5);
+  const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);
+  const [minChannelW,setMinChannelW]=useState(0.8),[minFinT,setMinFinT]=useState(0.3),[minWall,setMinWall]=useState(0.8),[maxChannelDepth,setMaxChannelDepth]=useState(8),[toolRadius,setToolRadius]=useState(0.5);
   const [systemExtra,setSystemExtra]=useState(30),[objective,setObjective]=useState("balanced"),[optimized,setOptimized]=useState(false);
   const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&tempMin<=tempMax&&tempStep>0&&channelW>0&&channelH>0&&channelCount>=1&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
-  const fitWidth=channelCount*channelW+(channelCount-1)*finT;\n  const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
+  const fitWidth=channelCount*channelW+(channelCount-1)*finT;
+  const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
   const flowResults=useMemo<FlowResult[]>(()=>{
     if(!validInputs)return [];
     const flowCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
