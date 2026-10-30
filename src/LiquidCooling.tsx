@@ -90,9 +90,9 @@ export default function LiquidCooling() {
       const rtim=(timT/1000)/(timK*((contactL/1000)*(contactW/1000)));
       const rbase=(baseT/1000)/(copperK*((chipL/1000)*(chipW/1000)));
       const rt=rjc+rtim+rbase+1/Math.max(ht*areaWet,1e-9);
-      const out=tin+power/(rho*(testFlow/60000)*cp);
-      const tj=(tin+out)/2+power*rt;
-      candidates.push({w,h,n,flow:{flow:testFlow,velocity:v,reynolds:re,h:ht,pressure:dp,tj,outlet:out,rTotal:rt,feasible:tj<=tjMax}});
+      const out=testTin+power/(rho*(testFlow/60000)*cp);
+      const tj=(testTin+out)/2+power*rt;
+      candidates.push({w,h,n,flow:{flow:testFlow,inlet:testTin,velocity:v,reynolds:re,h:ht,pressure:dp,tj,outlet:out,rTotal:rt,feasible:tj<=tjMax}});
     }
     const viable=candidates.filter(c=>c.flow.feasible);
     const pool=viable.length?viable:candidates;
