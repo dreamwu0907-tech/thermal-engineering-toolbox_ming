@@ -169,6 +169,10 @@ export default function LiquidCooling() {
         <Field label="Rjc" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
       </div><p className="lc-note">晶片、TIM 與冷板接觸區分開輸入；TIM 熱阻以三者面積的最小值估算，並假設接觸區置中且完整重疊。實際接觸壓力與偏移仍需另行確認。</p></Card>
     <div className="lc-grid">
+      <Card title="冷卻液熱物性" kicker="COOLANT THERMAL PROPERTIES"><div className="lc-fields">
+        <Field label="Density" value={rho} unit="kg/m³" onChange={setRho}/>
+        <Field label="Specific Heat Cp" value={cp} unit="J/kg·K" onChange={setCp}/>
+      </div><p className="lc-note">Stage 1 的冷卻液溫升與平均液溫使用密度及定壓比熱計算。預設值接近常溫純水，請依實際 coolant datasheet 與代表性液溫更新。</p></Card>
       <Card title="冷卻條件變數掃描" kicker="INLET TEMPERATURE & FLOW"><div className="lc-fields">
         <Field label="最低入液溫度" value={preTinMin} unit="°C" onChange={setPreTinMin}/>
         <Field label="最高入液溫度" value={preTinMax} unit="°C" onChange={setPreTinMax}/>
@@ -198,6 +202,7 @@ export default function LiquidCooling() {
       </div>
       {preThermalResults.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Inlet<br/>°C</th><th>Flow<br/>LPM</th><th>Coolant ΔT<br/>°C</th><th>Mean coolant<br/>°C</th><th>Available cold plate Rth<br/>K/W</th><th>Thermal budget</th></tr></thead><tbody>{preThermalResults.slice(0,100).map((r,i)=><tr key={i}><td>{r.inlet.toFixed(1)}</td><td>{r.flow.toFixed(2)}</td><td>{r.coolantRise.toFixed(2)}</td><td>{r.meanCoolant.toFixed(2)}</td><td>{r.rcpBudget.toFixed(4)}</td><td><span className={r.feasible?"lc-pass":"lc-fail"}>{r.feasible?"Positive budget":"Infeasible"}</span></td></tr>)}</tbody></table></div>:<p className="lc-note">請確認晶片、接觸條件、冷卻液物性與掃描範圍皆有效。</p>}
       <div className="lc-table-wrap" style={{marginTop:18}}><table className="lc-table"><thead><tr><th>Rank</th><th>Plate Length</th><th>Plate Width</th><th>Plate Height</th><th>Envelope Volume</th></tr></thead><tbody>{preSizeResults.map((r,i)=><tr key={i}><td>{i+1}</td><td>{r.length} mm</td><td>{r.width} mm</td><td>{r.height} mm</td><td>{(r.volume/1000).toFixed(1)} cm³</td></tr>)}</tbody></table></div>
+      <div className="lc-opt-head" style={{marginTop:16}}><span className="lc-note">可將 Stage 1 的 Tin／Flow 掃描範圍帶入 Stage 2，作為詳細流道模型的測試條件。</span><button className="lc-primary" onClick={()=>{setTempMode("sweep");setTempMin(preTinMin);setTempMax(preTinMax);setTempStep(preTinStep);setFlowMin(preFlowMin);setFlowMax(preFlowMax);setFlowStep(preFlowStep);}}>帶入 Stage 2 條件</button></div>
       <div className="lc-warning"><b>Stage 1 模型邊界：</b>可用冷板熱阻預算 = (Tj Max − 冷卻液平均溫度) / Power − Rjc − RTIM。正值代表仍有熱阻空間可供冷板設計，不代表現有冷板一定達得到。尺寸表只比較外型體積，未預測流道對流性能、底板熱擴散或壓降；這些由 Stage 2 的幾何模型評估。</div>
     </Card>
     <div className="lc-stage"><span>02</span><div><b>Stage 2 · Detailed Cold Plate Design</b><small>指定流道與材料，驗證熱性能、壓降並進行幾何最佳化</small></div><span className="lc-stage-active">DETAILED DESIGN</span></div>
@@ -218,10 +223,9 @@ export default function LiquidCooling() {
         <Field label="刀具半徑（CNC）" value={toolRadius} unit="mm" step={0.1} onChange={setToolRadius}/>
       </div><p className="lc-note">預設值僅供初步評估，請依實際加工廠、刀具與製程能力調整。CNC 刀具直徑需能容納於流道寬度內；Skived Fin 的刀具限制需另依設備確認。</p></Card>
       <Card title="冷卻液自訂物性" kicker="COOLANT PROPERTIES"><div className="lc-fields">
-        <Choice label="入液溫度模式" value={tempMode} onChange={setTempMode} options={[["fixed","固定入液溫度"],["sweep","入液溫度掃描"]]}/>{tempMode==="fixed"?<Field label="Coolant Inlet Temperature" value={tin} unit="°C" onChange={setTin}/>:<><Field label="最低入液溫度" value={tempMin} unit="°C" onChange={setTempMin}/><Field label="最高入液溫度" value={tempMax} unit="°C" onChange={setTempMax}/><Field label="溫度掃描間距" value={tempStep} unit="°C" onChange={setTempStep}/></>}<Field label="Density" value={rho} unit="kg/m³" onChange={setRho}/>
-        <Field label="Specific Heat Cp" value={cp} unit="J/kg·K" onChange={setCp}/><Field label="Dynamic Viscosity μ" value={mu} unit="Pa·s" step={0.00001} onChange={setMu}/>
+        <Choice label="入液溫度模式" value={tempMode} onChange={setTempMode} options={[["fixed","固定入液溫度"],["sweep","入液溫度掃描"]]}/>{tempMode==="fixed"?<Field label="Coolant Inlet Temperature" value={tin} unit="°C" onChange={setTin}/>:<><Field label="最低入液溫度" value={tempMin} unit="°C" onChange={setTempMin}/><Field label="最高入液溫度" value={tempMax} unit="°C" onChange={setTempMax}/><Field label="溫度掃描間距" value={tempStep} unit="°C" onChange={setTempStep}/></>}<Field label="Dynamic Viscosity μ" value={mu} unit="Pa·s" step={0.00001} onChange={setMu}/>
         <Field label="Thermal Conductivity k" value={coolantK} unit="W/m·K" step={0.01} onChange={setCoolantK}/>
-      </div><p className="lc-note">第一版採固定物性。輸入值應對應代表性液溫；溫度相依物性表與內插功能列為後續擴充。</p></Card>
+      </div><p className="lc-note">Stage 2 使用 μ 與 k 計算流道 Re、Nu 及對流熱傳係數；第一版採固定物性，輸入值應對應代表性液溫。</p></Card>
       <Card title="流量掃描設定" kicker="FLOW RATE SWEEP"><div className="lc-fields">
         <Field label="最低流量" value={flowMin} unit="LPM" step={0.1} onChange={setFlowMin}/><Field label="最高流量" value={flowMax} unit="LPM" step={0.1} onChange={setFlowMax}/>
         <Field label="掃描間距" value={flowStep} unit="LPM" step={0.05} onChange={setFlowStep}/><Field label="系統其他元件壓降假設" value={systemExtra} unit="kPa" step={1} onChange={setSystemExtra}/>
