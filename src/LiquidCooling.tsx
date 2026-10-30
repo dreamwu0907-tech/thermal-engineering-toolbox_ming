@@ -40,7 +40,7 @@ export default function LiquidCooling() {
   const [plateL,setPlateL]=useState(50),[plateW,setPlateW]=useState(50),[baseT,setBaseT]=useState(5),[channelH,setChannelH]=useState(2),[bottomWall,setBottomWall]=useState(1.5);
   const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);
   const [systemExtra,setSystemExtra]=useState(30),[objective,setObjective]=useState("balanced"),[optimized,setOptimized]=useState(false);
-  const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&channelW>0&&channelH>0&&channelCount>=1&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
+  const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&channelW>0&&channelH>0&&channelCount>=1&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
   const fitWidth=channelCount*channelW+(channelCount-1)*finT;
   const flowResults=useMemo<FlowResult[]>(()=>{
     if(!validInputs)return [];
