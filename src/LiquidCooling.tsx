@@ -5,6 +5,12 @@ type FlowResult = {
   flow: number; inlet: number; velocity: number; reynolds: number; h: number; pressure: number;
   outlet: number; tj: number; rTotal: number; feasible: boolean;
 };
+type PreThermalResult = { inlet:number; flow:number; coolantRise:number; meanCoolant:number; rcpBudget:number; feasible:boolean };
+const scanValues = (min:number,max:number,step:number,limit=120):number[] => {
+  if (![min,max,step].every(Number.isFinite) || step<=0 || max<min) return [];
+  const count=Math.min(limit,Math.floor((max-min)/step+1e-8)+1);
+  return Array.from({length:count},(_,i)=>Number((min+i*step).toFixed(6)));
+};
 const copperK = 390;
 const frictionFactor = (re:number, aspect:number) => {
   if (re <= 0) return 0;
@@ -33,6 +39,11 @@ function Card({title,kicker,children}:{title:string;kicker:string;children:React
 }
 export default function LiquidCooling() {
   const [power,setPower]=useState(500),[chipL,setChipL]=useState(40),[chipW,setChipW]=useState(40),[tjMax,setTjMax]=useState(85),[rjc,setRjc]=useState(0.015);
+  const [preTinMin,setPreTinMin]=useState(25),[preTinMax,setPreTinMax]=useState(45),[preTinStep,setPreTinStep]=useState(5);
+  const [preFlowMin,setPreFlowMin]=useState(0.3),[preFlowMax,setPreFlowMax]=useState(2),[preFlowStep,setPreFlowStep]=useState(0.1);
+  const [preLengthMin,setPreLengthMin]=useState(50),[preLengthMax,setPreLengthMax]=useState(120),[preLengthStep,setPreLengthStep]=useState(10);
+  const [preWidthMin,setPreWidthMin]=useState(50),[preWidthMax,setPreWidthMax]=useState(120),[preWidthStep,setPreWidthStep]=useState(10);
+  const [preHeightMin,setPreHeightMin]=useState(5),[preHeightMax,setPreHeightMax]=useState(15),[preHeightStep,setPreHeightStep]=useState(1);
   const [contactL,setContactL]=useState(40),[contactW,setContactW]=useState(40),[coldContactL,setColdContactL]=useState(50),[coldContactW,setColdContactW]=useState(50),[timT,setTimT]=useState(0.1),[timK,setTimK]=useState(5);
   const [tin,setTin]=useState(40),[tempMode,setTempMode]=useState("fixed"),[tempMin,setTempMin]=useState(30),[tempMax,setTempMax]=useState(45),[tempStep,setTempStep]=useState(5),[flowMin,setFlowMin]=useState(0.5),[flowMax,setFlowMax]=useState(2),[flowStep,setFlowStep]=useState(0.25);
   const [rho,setRho]=useState(997),[cp,setCp]=useState(4180),[mu,setMu]=useState(0.00089),[coolantK,setCoolantK]=useState(0.6);
@@ -44,6 +55,37 @@ export default function LiquidCooling() {
   const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&(tempMode!=="sweep"||(tempMin<=tempMax&&tempStep>0))&&channelW>0&&channelH>0&&channelCount>=1&&finT>0&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
   const fitWidth=channelCount*channelW+(channelCount-1)*finT;
   const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
+  const preThermalResults=useMemo<PreThermalResult[]>(()=>{
+    const tins=scanValues(preTinMin,preTinMax,preTinStep,80);
+    const flows=scanValues(preFlowMin,preFlowMax,preFlowStep,120);
+    const chipArea=(chipL/1000)*(chipW/1000);
+    const contactArea=Math.min(chipArea,(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));
+    if(!validInputs||tins.length===0||flows.length===0||contactArea<=0)return [];
+    const rTim=(timT/1000)/(timK*contactArea);
+    const upstreamResistance=rjc+rTim;
+    const rows:PreThermalResult[]=[];
+    for(const inlet of tins) for(const flow of flows) {
+      const massFlow=rho*(flow/60000);
+      const coolantRise=power/Math.max(massFlow*cp,1e-12);
+      const meanCoolant=inlet+coolantRise/2;
+      const rcpBudget=(tjMax-meanCoolant)/power-upstreamResistance;
+      rows.push({inlet,flow,coolantRise,meanCoolant,rcpBudget,feasible:rcpBudget>0});
+    }
+    return rows;
+  },[validInputs,preTinMin,preTinMax,preTinStep,preFlowMin,preFlowMax,preFlowStep,chipL,chipW,contactL,contactW,coldContactL,coldContactW,timT,timK,rjc,rho,cp,power,tjMax]);
+  const preSizeResults=useMemo(()=>{
+    const lengths=scanValues(preLengthMin,preLengthMax,preLengthStep,80);
+    const widths=scanValues(preWidthMin,preWidthMax,preWidthStep,80);
+    const heights=scanValues(preHeightMin,preHeightMax,preHeightStep,80);
+    const rows:{length:number;width:number;height:number;volume:number}[]=[];
+    for(const length of lengths)for(const width of widths)for(const height of heights) {
+      rows.push({length,width,height,volume:length*width*height});
+      if(rows.length>=5000)break;
+    }
+    return rows.sort((a,b)=>a.volume-b.volume).slice(0,10);
+  },[preLengthMin,preLengthMax,preLengthStep,preWidthMin,preWidthMax,preWidthStep,preHeightMin,preHeightMax,preHeightStep]);
+  const preFeasibleCount=preThermalResults.filter(r=>r.feasible).length;
+  const bestPreBudget=preThermalResults.filter(r=>r.feasible).sort((a,b)=>b.rcpBudget-a.rcpBudget)[0];
   const flowResults=useMemo<FlowResult[]>(()=>{
     if(!validInputs)return [];
     const flowCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
@@ -108,16 +150,50 @@ export default function LiquidCooling() {
   },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,coldContactL,coldContactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMax,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
   const selected=flowResults.length?flowResults[Math.floor(flowResults.length/2)]:undefined;
   return <main className="lc-shell">
-    <header className="lc-hero"><div><p className="lc-eyebrow">THERMAL ENGINEERING TOOLBOX / LIQUID COOLING</p><h1>水冷板初步設計工作台</h1><p>從晶片熱負載、冷板空間與冷卻液物性出發，初步評估流道配置、熱性能與系統壓降需求。</p></div><div className="lc-version">PRELIMINARY<br/>DESIGN / V1</div></header>
-    <div className="lc-stage"><span>01</span><div><b>Preliminary Design</b><small>初步設計與流量掃描</small></div><span className="lc-stage-active">CURRENT</span></div>
-    <div className="lc-grid">
-      <Card title="熱源與接觸條件" kicker="CHIP & THERMAL INPUT"><div className="lc-fields">
+    <header className="lc-hero"><div><p className="lc-eyebrow">THERMAL ENGINEERING TOOLBOX / LIQUID COOLING</p><h1>水冷板初步設計工作台</h1><p>先由晶片規格探索熱阻預算、入液溫度、流量與冷板外型，再進入流道幾何、熱性能及系統壓降評估。</p></div><div className="lc-version">PRELIMINARY<br/>DESIGN / V1</div></header>
+
+    <div className="lc-stage"><span>01</span><div><b>Stage 1 · Pre-Design Exploration</b><small>由晶片規格反推熱阻預算，掃描冷卻條件與機構空間</small></div><span className="lc-stage-active">PRE-DESIGN</span></div>
+          <Card title="熱源與接觸條件" kicker="CHIP & THERMAL INPUT"><div className="lc-fields">
         <Field label="晶片功耗" value={power} unit="W" onChange={setPower}/><Field label="Tj Max" value={tjMax} unit="°C" onChange={setTjMax}/>
         <Field label="Chip Length" value={chipL} unit="mm" onChange={setChipL}/><Field label="Chip Width" value={chipW} unit="mm" onChange={setChipW}/>
         <Field label="TIM Contact Length" value={contactL} unit="mm" onChange={setContactL}/><Field label="TIM Contact Width" value={contactW} unit="mm" onChange={setContactW}/><Field label="Cold Plate Contact Length" value={coldContactL} unit="mm" onChange={setColdContactL}/><Field label="Cold Plate Contact Width" value={coldContactW} unit="mm" onChange={setColdContactW}/>
         <Field label="TIM Thickness" value={timT} unit="mm" step={0.01} onChange={setTimT}/><Field label="TIM Conductivity" value={timK} unit="W/m·K" onChange={setTimK}/>
         <Field label="Rjc" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
       </div><p className="lc-note">晶片、TIM 與冷板接觸區分開輸入；TIM 熱阻以三者面積的最小值估算，並假設接觸區置中且完整重疊。實際接觸壓力與偏移仍需另行確認。</p></Card>
+    <div className="lc-grid">
+      <Card title="冷卻條件變數掃描" kicker="INLET TEMPERATURE & FLOW"><div className="lc-fields">
+        <Field label="最低入液溫度" value={preTinMin} unit="°C" onChange={setPreTinMin}/>
+        <Field label="最高入液溫度" value={preTinMax} unit="°C" onChange={setPreTinMax}/>
+        <Field label="入液溫度間距" value={preTinStep} unit="°C" onChange={setPreTinStep}/>
+        <Field label="最低流量" value={preFlowMin} unit="LPM" step={0.1} onChange={setPreFlowMin}/>
+        <Field label="最高流量" value={preFlowMax} unit="LPM" step={0.1} onChange={setPreFlowMax}/>
+        <Field label="流量間距" value={preFlowStep} unit="LPM" step={0.05} onChange={setPreFlowStep}/>
+      </div><p className="lc-note">入液溫度與流量皆視為設計變數。此處以冷卻液平均溫度估算熱阻預算，物性採下方 Stage 2 冷卻液設定中的數值；請確認其代表性液溫。</p></Card>
+      <Card title="冷板外型空間掃描" kicker="COLD PLATE ENVELOPE"><div className="lc-fields">
+        <Field label="最小長度" value={preLengthMin} unit="mm" onChange={setPreLengthMin}/>
+        <Field label="最大長度" value={preLengthMax} unit="mm" onChange={setPreLengthMax}/>
+        <Field label="長度間距" value={preLengthStep} unit="mm" onChange={setPreLengthStep}/>
+        <Field label="最小寬度" value={preWidthMin} unit="mm" onChange={setPreWidthMin}/>
+        <Field label="最大寬度" value={preWidthMax} unit="mm" onChange={setPreWidthMax}/>
+        <Field label="寬度間距" value={preWidthStep} unit="mm" onChange={setPreWidthStep}/>
+        <Field label="最小高度" value={preHeightMin} unit="mm" onChange={setPreHeightMin}/>
+        <Field label="最大高度" value={preHeightMax} unit="mm" onChange={setPreHeightMax}/>
+        <Field label="高度間距" value={preHeightStep} unit="mm" onChange={setPreHeightStep}/>
+      </div><p className="lc-note">外型掃描目前用於建立空間／體積候選，不會直接假設尺寸越大就一定散熱越好。流道與內部熱傳結構尚未定義，需在 Stage 2 驗證實際熱性能。</p></Card>
+    </div>
+    <Card title="Stage 1｜熱阻預算與設計探索結果" kicker="THERMAL BUDGET & DESIGN SPACE">
+      <div className="lc-summary">
+        <div><small>冷卻條件組合</small><b>{preThermalResults.length}</b><span>temperature × flow</span></div>
+        <div><small>正熱阻預算組合</small><b>{preFeasibleCount}</b><span>not yet geometry-validated</span></div>
+        <div><small>最大可用冷板熱阻預算</small><b>{bestPreBudget?bestPreBudget.rcpBudget.toFixed(4):"—"}</b><span>K/W · {bestPreBudget?bestPreBudget.inlet.toFixed(0)+"°C / "+bestPreBudget.flow.toFixed(2)+" LPM":"no feasible condition"}</span></div>
+        <div><small>外型尺寸候選</small><b>{preSizeResults.length}</b><span>smallest volume candidates</span></div>
+      </div>
+      {preThermalResults.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Inlet<br/>°C</th><th>Flow<br/>LPM</th><th>Coolant ΔT<br/>°C</th><th>Mean coolant<br/>°C</th><th>Available cold plate Rth<br/>K/W</th><th>Thermal budget</th></tr></thead><tbody>{preThermalResults.slice(0,100).map((r,i)=><tr key={i}><td>{r.inlet.toFixed(1)}</td><td>{r.flow.toFixed(2)}</td><td>{r.coolantRise.toFixed(2)}</td><td>{r.meanCoolant.toFixed(2)}</td><td>{r.rcpBudget.toFixed(4)}</td><td><span className={r.feasible?"lc-pass":"lc-fail"}>{r.feasible?"Positive budget":"Infeasible"}</span></td></tr>)}</tbody></table></div>:<p className="lc-note">請確認晶片、接觸條件、冷卻液物性與掃描範圍皆有效。</p>}
+      <div className="lc-table-wrap" style={{marginTop:18}}><table className="lc-table"><thead><tr><th>Rank</th><th>Plate Length</th><th>Plate Width</th><th>Plate Height</th><th>Envelope Volume</th></tr></thead><tbody>{preSizeResults.map((r,i)=><tr key={i}><td>{i+1}</td><td>{r.length} mm</td><td>{r.width} mm</td><td>{r.height} mm</td><td>{(r.volume/1000).toFixed(1)} cm³</td></tr>)}</tbody></table></div>
+      <div className="lc-warning"><b>Stage 1 模型邊界：</b>可用冷板熱阻預算 = (Tj Max − 冷卻液平均溫度) / Power − Rjc − RTIM。正值代表仍有熱阻空間可供冷板設計，不代表現有冷板一定達得到。尺寸表只比較外型體積，未預測流道對流性能、底板熱擴散或壓降；這些由 Stage 2 的幾何模型評估。</div>
+    </Card>
+    <div className="lc-stage"><span>02</span><div><b>Stage 2 · Detailed Cold Plate Design</b><small>指定流道與材料，驗證熱性能、壓降並進行幾何最佳化</small></div><span className="lc-stage-active">DETAILED DESIGN</span></div>
+    <div className="lc-grid">
       <Card title="冷板幾何與製程" kicker="COLD PLATE GEOMETRY"><div className="lc-fields">
         <Field label="冷板長度" value={plateL} unit="mm" onChange={setPlateL}/><Field label="冷板寬度" value={plateW} unit="mm" onChange={setPlateW}/>
         <Field label="底板厚度（晶片至流道頂部）" value={baseT} unit="mm" step={0.5} onChange={setBaseT}/><Field label="流道高度" value={channelH} unit="mm" step={0.1} onChange={setChannelH}/>
@@ -143,7 +219,7 @@ export default function LiquidCooling() {
         <Field label="掃描間距" value={flowStep} unit="LPM" step={0.05} onChange={setFlowStep}/><Field label="系統其他元件壓降假設" value={systemExtra} unit="kPa" step={1} onChange={setSystemExtra}/>
       </div><p className="lc-note">入液溫度與流量皆可設定掃描範圍。系統其他元件壓降僅為使用者假設值，冷板壓降與系統總壓降分開呈現。</p></Card>
     </div>
-    <Card title="Stage 1｜初步性能評估" kicker="PRELIMINARY PERFORMANCE"><div className="lc-summary">
+    <Card title="Stage 2｜詳細幾何性能評估" kicker="DETAILED GEOMETRY PERFORMANCE"><div className="lc-summary">
       <div><small>掃描點數</small><b>{flowResults.length}</b><span>flow conditions</span></div>
       <div><small>最低壓降可行流量</small><b>{best?best.flow.toFixed(2):"—"}</b><span>LPM · Tj ≤ Tj Max</span></div>
       <div><small>中位流量預估 Tj</small><b>{selected?selected.tj.toFixed(1):"—"}</b><span>°C</span></div>
@@ -152,7 +228,7 @@ export default function LiquidCooling() {
     {flowResults.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Inlet<br/>°C</th><th>Flow<br/>LPM</th><th>Velocity<br/>m/s</th><th>Re</th><th>h<br/>W/m²K</th><th>ΔP cold plate<br/>kPa</th><th>Tout<br/>°C</th><th>Tj est.<br/>°C</th><th>Status</th></tr></thead><tbody>{flowResults.map((r,i)=><tr key={i}><td>{r.inlet.toFixed(1)}</td><td>{r.flow.toFixed(2)}</td><td>{r.velocity.toFixed(2)}</td><td>{Math.round(r.reynolds)}</td><td>{Math.round(r.h)}</td><td>{(r.pressure/1000).toFixed(2)}</td><td>{r.outlet.toFixed(1)}</td><td>{r.tj.toFixed(1)}</td><td><span className={r.feasible?"lc-pass":"lc-fail"}>{r.feasible?"Within Tj":"Over Tj"}</span></td></tr>)}</tbody></table></div>:<p className="lc-note">請確認輸入值皆為正值，且流量上限大於或等於下限。</p>}
     <div className="lc-warning"><b>模型邊界：</b>目前為初步 1D 估算。蛇形流道以單一路徑及彎道 K 值近似；並聯流道假設支路均勻分流，尚未求解歧管分配。未納入入口/出口實際結構、粗糙度、接觸熱阻分佈、三維熱擴散及 CDU/Pump 曲線。Tj 是含假設 Rjc、TIM 與簡化底板導熱的趨勢估算，不是 CFD 或實測值。</div>
     </Card>
-    <div className="lc-stage"><span>02</span><div><b>Design Optimization</b><small>尺寸搜尋與方案比較</small></div><span className="lc-stage-active">BETA</span></div>
+    <div className="lc-stage"><span>02A</span><div><b>Geometry Optimization</b><small>在 Stage 2 的熱性能模型上搜尋流道與底板尺寸</small></div><span className="lc-stage-active">OPTIMIZATION</span></div>
     <Card title="尺寸優化" kicker="PARAMETRIC DESIGN SEARCH"><div className="lc-opt-head"><Choice label="優化目標" value={objective} onChange={v=>{setObjective(v);setOptimized(true)}} options={[["balanced","Balanced 平衡熱性能與壓降"],["thermal","Thermal Priority 熱性能優先"],["pressure","Low Pressure Drop 低壓降優先"],["compact","Compact Design 緊湊尺寸"]]}/><button className="lc-primary" onClick={()=>setOptimized(true)}>執行尺寸搜尋</button></div>
       <p className="lc-note">以目前幾何為中心，掃描流道寬、高、數量、鰭片厚度與底板厚度的鄰近組合；先篩選 Tj，再依所選目標排序。搜尋流量採最低掃描流量，方便檢查低流量下的設計風險。</p>
       {optimized&&optimization.length>0?<div className="lc-table-wrap"><table className="lc-table"><thead><tr><th>Rank</th><th>Channel W</th><th>Channel H</th><th>Fin T</th><th>Base T</th><th>Count</th><th>Tj est.</th><th>Cold plate ΔP</th><th>Result</th></tr></thead><tbody>{optimization.map((c,i)=><tr key={i}><td>{i+1}</td><td>{c.w.toFixed(2)} mm</td><td>{c.h.toFixed(2)} mm</td><td>{c.fin.toFixed(2)} mm</td><td>{c.base.toFixed(2)} mm</td><td>{c.n}</td><td>{c.flow.tj.toFixed(1)} °C</td><td>{(c.flow.pressure/1000).toFixed(2)} kPa</td><td>{c.flow.feasible?"Within Tj":"No feasible Tj"}</td></tr>)}</tbody></table></div>:optimized?<p className="lc-note">目前加工寬度限制下沒有可搜尋的幾何組合，請調整流道尺寸或冷板寬度。</p>:null}
