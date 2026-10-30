@@ -33,7 +33,7 @@ function Card({title,kicker,children}:{title:string;kicker:string;children:React
 }
 export default function LiquidCooling() {
   const [power,setPower]=useState(500),[chipL,setChipL]=useState(40),[chipW,setChipW]=useState(40),[tjMax,setTjMax]=useState(85),[rjc,setRjc]=useState(0.015);
-  const [contactL,setContactL]=useState(40),[contactW,setContactW]=useState(40),[timT,setTimT]=useState(0.1),[timK,setTimK]=useState(5);
+  const [contactL,setContactL]=useState(40),[contactW,setContactW]=useState(40),[coldContactL,setColdContactL]=useState(50),[coldContactW,setColdContactW]=useState(50),[timT,setTimT]=useState(0.1),[timK,setTimK]=useState(5);
   const [tin,setTin]=useState(40),[flowMin,setFlowMin]=useState(0.5),[flowMax,setFlowMax]=useState(2),[flowStep,setFlowStep]=useState(0.25);
   const [rho,setRho]=useState(997),[cp,setCp]=useState(4180),[mu,setMu]=useState(0.00089),[coolantK,setCoolantK]=useState(0.6);
   const [channelType,setChannelType]=useState("parallel"),[process,setProcess]=useState("cnc");
@@ -68,7 +68,7 @@ export default function LiquidCooling() {
       const tj=(tin+outlet)/2+power*rTotal;
       return {flow,velocity,reynolds:re,h,pressure,outlet,tj,rTotal,feasible:tj<=tjMax};
     });
-  },[validInputs,flowMin,flowMax,flowStep,channelType,channelCount,channelW,channelH,finT,plateL,plateW,rho,cp,mu,coolantK,power,tin,tjMax,chipL,chipW,contactL,contactW,timT,timK,rjc,baseT]);
+  },[validInputs,flowMin,flowMax,flowStep,channelType,channelCount,channelW,channelH,finT,plateL,plateW,rho,cp,mu,coolantK,power,tin,tjMax,chipL,chipW,contactL,contactW,coldContactL,coldContactW,timT,timK,rjc,baseT]);
   const best=flowResults.filter(r=>r.feasible).sort((a,b)=>a.pressure-b.pressure)[0];
   const maxCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
   const optimization=useMemo(()=>{
@@ -108,10 +108,10 @@ export default function LiquidCooling() {
       <Card title="熱源與接觸條件" kicker="CHIP & THERMAL INPUT"><div className="lc-fields">
         <Field label="晶片功耗" value={power} unit="W" onChange={setPower}/><Field label="Tj Max" value={tjMax} unit="°C" onChange={setTjMax}/>
         <Field label="Chip Length" value={chipL} unit="mm" onChange={setChipL}/><Field label="Chip Width" value={chipW} unit="mm" onChange={setChipW}/>
-        <Field label="TIM Contact Length" value={contactL} unit="mm" onChange={setContactL}/><Field label="TIM Contact Width" value={contactW} unit="mm" onChange={setContactW}/>
+        <Field label="TIM Contact Length" value={contactL} unit="mm" onChange={setContactL}/><Field label="TIM Contact Width" value={contactW} unit="mm" onChange={setContactW}/><Field label="Cold Plate Contact Length" value={coldContactL} unit="mm" onChange={setColdContactL}/><Field label="Cold Plate Contact Width" value={coldContactW} unit="mm" onChange={setColdContactW}/>
         <Field label="TIM Thickness" value={timT} unit="mm" step={0.01} onChange={setTimT}/><Field label="TIM Conductivity" value={timK} unit="W/m·K" onChange={setTimK}/>
         <Field label="Rjc" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
-      </div><p className="lc-note">晶片尺寸、TIM 接觸區與冷板接觸面積分開設定。Rjc、TIM 可先用估值；未知時應確認資料來源，避免將預估 Tj 視為精確值。</p></Card>
+      </div><p className="lc-note">晶片尺寸、TIM 接觸區與冷板加工接觸區分開設定。TIM 熱阻以 TIM 接觸面積估算；若三者不一致，需確認實際接觸與載荷分佈。Rjc、TIM 可先用估值。</p></Card>
       <Card title="冷板幾何與製程" kicker="COLD PLATE GEOMETRY"><div className="lc-fields">
         <Field label="冷板長度" value={plateL} unit="mm" onChange={setPlateL}/><Field label="冷板寬度" value={plateW} unit="mm" onChange={setPlateW}/>
         <Field label="底板厚度（晶片至流道頂部）" value={baseT} unit="mm" step={0.5} onChange={setBaseT}/><Field label="流道高度" value={channelH} unit="mm" step={0.1} onChange={setChannelH}/>
