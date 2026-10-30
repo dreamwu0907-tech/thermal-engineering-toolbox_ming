@@ -38,10 +38,10 @@ export default function LiquidCooling() {
   const [rho,setRho]=useState(997),[cp,setCp]=useState(4180),[mu,setMu]=useState(0.00089),[coolantK,setCoolantK]=useState(0.6);
   const [channelType,setChannelType]=useState("parallel"),[process,setProcess]=useState("cnc");
   const [plateL,setPlateL]=useState(50),[plateW,setPlateW]=useState(50),[baseT,setBaseT]=useState(5),[channelH,setChannelH]=useState(2),[bottomWall,setBottomWall]=useState(1.5);
-  const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);
+  const [channelW,setChannelW]=useState(1.5),[finT,setFinT]=useState(0.5),[channelCount,setChannelCount]=useState(20);\n  const [minChannelW,setMinChannelW]=useState(0.8),[minFinT,setMinFinT]=useState(0.3),[minWall,setMinWall]=useState(0.8),[maxChannelDepth,setMaxChannelDepth]=useState(8),[toolRadius,setToolRadius]=useState(0.5);
   const [systemExtra,setSystemExtra]=useState(30),[objective,setObjective]=useState("balanced"),[optimized,setOptimized]=useState(false);
   const validInputs=power>0&&chipL>0&&chipW>0&&contactL>0&&contactW>0&&coldContactL>0&&coldContactW>0&&timK>0&&rho>0&&cp>0&&mu>0&&coolantK>0&&flowMin>0&&flowMax>=flowMin&&flowStep>0&&tempMin<=tempMax&&tempStep>0&&channelW>0&&channelH>0&&channelCount>=1&&plateL>0&&plateW>0&&baseT>=0&&bottomWall>=0;
-  const fitWidth=channelCount*channelW+(channelCount-1)*finT;
+  const fitWidth=channelCount*channelW+(channelCount-1)*finT;\n  const manufacturingOk=channelW>=minChannelW&&finT>=minFinT&&bottomWall>=minWall&&channelH<=maxChannelDepth&&(process!=="cnc"||toolRadius*2<=channelW);
   const flowResults=useMemo<FlowResult[]>(()=>{
     if(!validInputs)return [];
     const flowCount=Math.min(100,Math.floor((flowMax-flowMin)/flowStep+1e-8)+1);
@@ -81,7 +81,7 @@ export default function LiquidCooling() {
     const widths=[channelW*0.75,channelW,channelW*1.25], heights=[channelH*0.75,channelH,channelH*1.25], counts=[Math.max(2,channelCount-2),channelCount,channelCount+2];
     const testFlow=flowMin, testTin=tempMode==="fixed"?tin:tempMin;
     for(const w of widths)for(const h of heights)for(const n of counts){
-      if(n*w+(n-1)*finT>plateW)continue;
+      if(n*w+(n-1)*finT>plateW||w<minChannelW||finT<minFinT||bottomWall<minWall||h>maxChannelDepth||(process==="cnc"&&toolRadius*2>w))continue;
       const branches=channelType==="parallel"?n:1, area=w/1000*h/1000, v=(testFlow/60000)/(branches*area), dh=2*(w/1000)*(h/1000)/((w+h)/1000);
       const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr,Math.min(w,h)/Math.max(w,h))*coolantK/dh;
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
@@ -103,7 +103,7 @@ export default function LiquidCooling() {
       const score=(x:typeof a)=>((x.flow.tj-testTin)/(Math.max(tjMax-testTin,1)))+x.flow.pressure/Math.max(systemExtra*1000,1000);
       return score(a)-score(b);
     }).slice(0,5);
-  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMin]);
+  },[validInputs,channelW,channelH,channelCount,finT,plateW,flowMin,channelType,rho,mu,cp,coolantK,plateL,power,tin,tjMax,timT,timK,contactL,contactW,rjc,baseT,chipL,chipW,objective,systemExtra,tempMode,tin,tempMin,minChannelW,minFinT,minWall,maxChannelDepth,toolRadius,bottomWall,process]);
   const selected=flowResults.length?flowResults[Math.floor(flowResults.length/2)]:undefined;
   return <main className="lc-shell">
     <header className="lc-hero"><div><p className="lc-eyebrow">THERMAL ENGINEERING TOOLBOX / LIQUID COOLING</p><h1>水冷板初步設計工作台</h1><p>從晶片熱負載、冷板空間與冷卻液物性出發，初步評估流道配置、熱性能與系統壓降需求。</p></div><div className="lc-version">PRELIMINARY<br/>DESIGN / V1</div></header>
@@ -123,7 +123,14 @@ export default function LiquidCooling() {
         <Field label="鰭片厚度／間隔壁" value={finT} unit="mm" step={0.1} onChange={setFinT}/><Field label="流道數量／蛇形通道數" value={channelCount} unit="channels" onChange={setChannelCount}/>
         <Choice label="流道形式" value={channelType} onChange={setChannelType} options={[["parallel","Parallel 並聯流道"],["serpentine","Serpentine 蛇形流道"]]}/>
         <Choice label="製程" value={process} onChange={setProcess} options={[["cnc","CNC Machining"],["skived","Skived Fin 鏟齒"]]}/>
-      </div><div className={fitWidth<=plateW?"lc-fit":"lc-fit warning"}>流道配置寬度估算：{fitWidth.toFixed(1)} mm / 冷板寬度 {plateW} mm · 冷板總厚度估算：{(baseT+channelH+bottomWall).toFixed(1)} mm {fitWidth<=plateW?"· 幾何初步符合":"· 超出冷板寬度，請調整流道數或尺寸"}</div></Card>
+      </div><div className={fitWidth<=plateW?"lc-fit":"lc-fit warning"}>流道配置寬度估算：{fitWidth.toFixed(1)} mm / 冷板寬度 {plateW} mm · 冷板總厚度估算：{(baseT+channelH+bottomWall).toFixed(1)} mm {fitWidth>plateW?"· 超出冷板寬度":manufacturingOk?"· 初步符合加工限制":"· 有加工限制未符合，請檢查下方參數"}</div></Card>
+      <Card title="製程與加工限制" kicker="MANUFACTURING CONSTRAINTS"><div className="lc-fields">
+        <Field label="最小流道寬度" value={minChannelW} unit="mm" step={0.1} onChange={setMinChannelW}/>
+        <Field label="最小鰭片厚度" value={minFinT} unit="mm" step={0.1} onChange={setMinFinT}/>
+        <Field label="最小壁厚" value={minWall} unit="mm" step={0.1} onChange={setMinWall}/>
+        <Field label="最大流道加工深度" value={maxChannelDepth} unit="mm" step={0.5} onChange={setMaxChannelDepth}/>
+        <Field label="刀具半徑（CNC）" value={toolRadius} unit="mm" step={0.1} onChange={setToolRadius}/>
+      </div><p className="lc-note">預設值僅供初步評估，請依實際加工廠、刀具與製程能力調整。CNC 刀具直徑需能容納於流道寬度內；Skived Fin 的刀具限制需另依設備確認。</p></Card>
       <Card title="冷卻液自訂物性" kicker="COOLANT PROPERTIES"><div className="lc-fields">
         <Choice label="入液溫度模式" value={tempMode} onChange={setTempMode} options={[["fixed","固定入液溫度"],["sweep","入液溫度掃描"]]}/>{tempMode==="fixed"?<Field label="Coolant Inlet Temperature" value={tin} unit="°C" onChange={setTin}/>:<><Field label="最低入液溫度" value={tempMin} unit="°C" onChange={setTempMin}/><Field label="最高入液溫度" value={tempMax} unit="°C" onChange={setTempMax}/><Field label="溫度掃描間距" value={tempStep} unit="°C" onChange={setTempStep}/></>}<Field label="Density" value={rho} unit="kg/m³" onChange={setRho}/>
         <Field label="Specific Heat Cp" value={cp} unit="J/kg·K" onChange={setCp}/><Field label="Dynamic Viscosity μ" value={mu} unit="Pa·s" step={0.00001} onChange={setMu}/>
