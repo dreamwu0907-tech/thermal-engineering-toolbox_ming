@@ -63,8 +63,8 @@ export default function LiquidCooling() {
       const turns=channelType==="serpentine"?Math.max(0,channelCount-1):0;
       const kMinor=2+turns*1.5;
       const pressure=straight+kMinor*(rho*velocity*velocity/2);
-      const wetted=branchCount*2*((channelW+channelH)/1000)*(plateL/1000);
-      const chipArea=(chipL/1000)*(chipW/1000), contactArea=(contactL/1000)*(contactW/1000);
+      const wetted=branchCount*2*((channelW+channelH)/1000)*length;
+      const chipArea=(chipL/1000)*(chipW/1000), contactArea=Math.min(chipArea,(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));
       const rTim=(timT/1000)/(timK*contactArea);
       const rBase=(baseT/1000)/(copperK*chipArea);
       const rConv=1/Math.max(h*wetted,1e-9);
@@ -88,8 +88,8 @@ export default function LiquidCooling() {
       const re=rho*v*dh/mu,pr=cp*mu/coolantK,ht=nusselt(re,pr,Math.min(w,h)/Math.max(w,h))*coolantK/dh;
       const len=channelType==="parallel"?plateL/1000:(n*plateL+(n-1)*plateW)/1000;
       const dp=frictionFactor(re,Math.min(w,h)/Math.max(w,h))*(len/dh)*(rho*v*v/2)+(2+(channelType==="serpentine"?Math.max(0,n-1)*1.5:0))*(rho*v*v/2);
-      const areaWet=branches*2*((w+h)/1000)*(plateL/1000);
-      const rtim=(timT/1000)/(timK*((contactL/1000)*(contactW/1000)));
+      const areaWet=branches*2*((w+h)/1000)*len;
+      const overlapArea=Math.min((chipL/1000)*(chipW/1000),(contactL/1000)*(contactW/1000),(coldContactL/1000)*(coldContactW/1000));\n      const rtim=(timT/1000)/(timK*overlapArea);
       const rbase=(baseT/1000)/(copperK*((chipL/1000)*(chipW/1000)));
       const rt=rjc+rtim+rbase+1/Math.max(ht*areaWet,1e-9);
       const out=testTin+power/(rho*(testFlow/60000)*cp);
@@ -117,7 +117,7 @@ export default function LiquidCooling() {
         <Field label="TIM Contact Length" value={contactL} unit="mm" onChange={setContactL}/><Field label="TIM Contact Width" value={contactW} unit="mm" onChange={setContactW}/><Field label="Cold Plate Contact Length" value={coldContactL} unit="mm" onChange={setColdContactL}/><Field label="Cold Plate Contact Width" value={coldContactW} unit="mm" onChange={setColdContactW}/>
         <Field label="TIM Thickness" value={timT} unit="mm" step={0.01} onChange={setTimT}/><Field label="TIM Conductivity" value={timK} unit="W/m·K" onChange={setTimK}/>
         <Field label="Rjc" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
-      </div><p className="lc-note">晶片尺寸、TIM 接觸區與冷板加工接觸區分開設定。TIM 熱阻以 TIM 接觸面積估算；若三者不一致，需確認實際接觸與載荷分佈。Rjc、TIM 可先用估值。</p></Card>
+      </div><p className="lc-note">晶片、TIM 與冷板接觸區分開輸入；TIM 熱阻以三者面積的最小值估算，並假設接觸區置中且完整重疊。實際接觸壓力與偏移仍需另行確認。</p></Card>
       <Card title="冷板幾何與製程" kicker="COLD PLATE GEOMETRY"><div className="lc-fields">
         <Field label="冷板長度" value={plateL} unit="mm" onChange={setPlateL}/><Field label="冷板寬度" value={plateW} unit="mm" onChange={setPlateW}/>
         <Field label="底板厚度（晶片至流道頂部）" value={baseT} unit="mm" step={0.5} onChange={setBaseT}/><Field label="流道高度" value={channelH} unit="mm" step={0.1} onChange={setChannelH}/>
