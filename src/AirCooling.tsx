@@ -114,7 +114,7 @@ function makeCandidates(base: Geometry, auto: Record<string, boolean>, proc: Pro
   for (const baseT of bValues) for (const finT of tValues) for (const gap of gapValues) {
     if (constrained && (length > envelope.length || width > envelope.width || height > envelope.height)) continue;
     if (height < rule.minH || height > rule.maxH || finT < rule.minT || finT > rule.maxT || gap < rule.minGap || gap > rule.maxGap) continue;
-    const count = auto.finCount ? Math.max(1, Math.floor((width - gap) / (finT + gap))) : base.finCount;
+    const count = auto.finCount ? Math.max(1, Math.floor((width + gap) / (finT + gap))) : base.finCount;
     if (count * finT >= width) continue;
     out.push({ length, width, height, baseT, finT, gap, finCount: count });
   }
