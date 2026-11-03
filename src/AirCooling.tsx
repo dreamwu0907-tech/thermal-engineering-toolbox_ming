@@ -228,7 +228,7 @@ export default function AirCooling() {
         </div> : <div className="ac-grid ac-tim-fields">
           <Field label="TIM Thermal Resistance" value={rtim} unit="K/W" step={0.001} onChange={setRtim}/>
         </div>}
-        <p className="ac-note">Die Size 作為熱源面積與 TIM 接觸面積的估算基準。K 值模式以 R_TIM = 厚度 /（導熱係數 × Die 面積）計算；直接輸入模式不需要設定厚度。</p>
+        <p className="ac-note">Die Size 作為等效熱源面積與 TIM 接觸面積的簡化估算基準；若實際 TIM 接觸面積為 Package Lid / Case footprint，應以實際接觸尺寸修正。K 值模式以 R_TIM = 厚度 /（導熱係數 × Die 面積）計算；直接輸入模式不需要設定厚度。</p>
       </div>
     </section>
 
@@ -327,7 +327,7 @@ export default function AirCooling() {
             <button className="ac-use-scheme" onClick={() => { setLength(r.length); setWidth(r.width); setHeight(r.height); setBaseT(r.baseT); setFinT(r.finT); setGap(r.gap); setFinCount(r.finCount); setMode("forward"); }}>帶入 Forward Analysis</button>
           </article>) : <div className="ac-alert">目前搜尋範圍內沒有可用的幾何候選。請放寬尺寸限制或調整製程與手動參數。</div>}
         </div>}
-        {selected && <div className="ac-card ac-result-note"><b>模型假設與限制</b><p>本結果為簡化 1D 熱阻與空氣側壓差估算：以平均空氣溫度計算 Case 溫度，使用簡化內流道 Nu / Darcy friction factor 關係式；未納入風扇工作點、旁通漏風、流量不均、鰭片入口效應、接觸熱阻分布及 CFD 三維效應。異材底板／鰭片忽略接合界面熱阻。結果應用於前期設計比較，不可取代樣品測試與 CFD 驗證。</p><p>PASS：Tc 低於上限且 Margin ≥ 3°C；MARGINAL：0–3°C；FAIL：超過 Tc Max。此模型以 Case Temperature 為熱判定基準，不含 Junction-to-Case 熱阻，因此不能據此保證 Tc 符合規格。壓差只代表散熱器入口至出口，不代表整機系統壓降。未設定壓差硬性門檻，僅供方案比較。</p></div>}
+        {selected && <div className="ac-card ac-result-note"><b>模型假設與限制</b><p>本結果為簡化 1D 熱阻與空氣側壓差估算：以平均空氣溫度計算 Case 溫度，使用簡化內流道 Nu / Darcy friction factor 關係式；未納入風扇工作點、旁通漏風、流量不均、鰭片入口效應、接觸熱阻分布及 CFD 三維效應。異材底板／鰭片忽略接合界面熱阻。結果應用於前期設計比較，不可取代樣品測試與 CFD 驗證。</p><p>PASS：Tc 低於上限且 Margin ≥ 3°C；MARGINAL：0–3°C；FAIL：超過 Tc Max。此模型以 Case Temperature 為熱判定基準，不含 Junction-to-Case 熱阻，因此不能據此保證 Junction Temperature（Tj）符合規格。壓差只代表散熱器入口至出口，不代表整機系統壓降。未設定壓差硬性門檻，僅供方案比較。</p></div>}
       </>}
     </section>
     <footer className="ac-footer"><span>THERMAL ENGINEERING TOOLBOX</span><span>Forced-air heatsink · preliminary engineering model</span></footer>
