@@ -4,6 +4,7 @@ import "./AirCooling.css";
 type Axis = "X" | "Y" | "Z";
 type ProcessKey = "al-extrusion" | "al-skiving" | "cu-skiving" | "al-cnc" | "cu-cnc";
 type Objective = "thermal" | "pressure" | "compact";
+type DfmTier = "Recommended" | "Advanced" | "Not Recommended";
 type Material = { label: string; k: number };
 type Geometry = { length: number; width: number; height: number; baseT: number; finT: number; gap: number; finCount: number };
 type Result = Geometry & {
@@ -11,7 +12,7 @@ type Result = Geometry & {
   faceVelocity: number; channelVelocity: number; reynolds: number; h: number;
   eta: number; rjc: number; rtim: number; rbase: number; rfinAir: number;
   rtotal: number; tout: number; tj: number; margin: number; pressure: number;
-  volume: number; feasible: boolean; dfm: boolean;
+  volume: number; feasible: boolean; dfm: boolean; dfmTier: DfmTier;
 };
 const materials: Record<string, Material> = {
   al6063: { label: "Aluminum 6063", k: 200 },
@@ -92,12 +93,15 @@ function evaluate(g: Geometry, p: {
   const f = reynolds < 2300 ? 64 / Math.max(reynolds, 1) : 0.3164 / Math.pow(reynolds, 0.25);
   const pressure = (f * (lengthM / dh) + 2.5) * (air.rho * channelVelocity * channelVelocity / 2);
   const proc = processes[p.process];
-  const dfm = g.finT >= proc.minT && g.finT <= proc.maxT && g.gap >= proc.minGap && g.gap <= proc.maxGap && finHeight >= proc.minH && finHeight <= proc.maxH;
+  const recommended = g.finT >= proc.minT && g.finT <= proc.maxT && g.gap >= proc.minGap && g.gap <= proc.maxGap && finHeight >= proc.minH && finHeight <= proc.maxH;
+  const advanced = g.finT >= proc.minT * 0.7 && g.finT <= proc.maxT * 1.3 && g.gap >= proc.minGap * 0.7 && g.gap <= proc.maxGap * 1.3 && finHeight >= proc.minH * 0.7 && finHeight <= proc.maxH * 1.3;
+  const dfmTier: DfmTier = recommended ? "Recommended" : advanced ? "Advanced" : "Not Recommended";
+  const dfm = recommended;
   return {
     ...g, finPitch: g.finT + g.gap, flowLength, inletArea, openArea, faceVelocity,
     channelVelocity, reynolds, h, eta, rjc: p.rjc, rtim: p.rtim, rbase, rfinAir,
     rtotal, tout, tj, margin: p.tjMax - tj, pressure, volume: g.length * g.width * g.height,
-    feasible: tj <= p.tjMax, dfm,
+    feasible: tj <= p.tjMax, dfm, dfmTier,
   };
 }
 
@@ -303,7 +307,7 @@ export default function AirCooling() {
             ].map(([name, value]) => <div className="ac-bar-row" key={String(name)}><span>{name}</span><b>{fmt(Number(value), 4)} K/W</b><i style={{ width: Math.max(2, Number(value) / result.rtotal * 100) + "%" }}/><small>ΔT {fmt(power * Number(value), 1)} °C</small></div>)}</div>
             <div><h3>Inlet Cross Section</h3><SectionDrawing result={result} axis={axis}/><p className="ac-note">入風面 {axis} · Face Velocity {fmt(result.faceVelocity, 2)} m/s · Channel Velocity {fmt(result.channelVelocity, 2)} m/s</p></div>
           </div>
-          <div className="ac-geometry-summary"><span>Size {result.length} × {result.width} × {result.height} mm</span><span>Fin {result.finCount} pcs · {result.dfm ? "DFM range" : "Check DFM"}</span><span>T / Gap / Pitch {result.finT} / {result.gap} / {result.finPitch} mm</span><span>Fin Efficiency {fmt(result.eta * 100, 1)}%</span></div>
+          <div className="ac-geometry-summary"><span>Size {result.length} × {result.width} × {result.height} mm</span><span>Fin {result.finCount} pcs · {result.dfmTier}</span><span>T / Gap / Pitch {result.finT} / {result.gap} / {result.finPitch} mm</span><span>Fin Efficiency {fmt(result.eta * 100, 1)}%</span></div>
         </div>}
         {mode === "inverse" && <div className="ac-scheme-grid">
           {shown.length ? shown.map((r, i) => <article className="ac-card ac-scheme" key={r.length + "-" + r.width + "-" + r.finT + "-" + r.gap + "-" + r.baseT}>
