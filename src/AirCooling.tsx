@@ -314,6 +314,7 @@ export default function AirCooling() {
             <div className="ac-scheme-title"><span>SCHEME 0{i + 1}</span><b>{i === 0 ? (objective === "thermal" ? "Thermal Performance" : "Compact Design") : i === 1 ? "Low Pressure Drop" : (objective === "thermal" ? "Compact Design" : "Thermal Performance")}</b></div>
             <div className="ac-scheme-main"><strong>{fmt(r.tj, 1)} °C</strong><span className={"ac-status " + (status(r) === "FAIL" ? "fail" : status(r) === "MARGINAL" ? "marginal" : "pass")}>{status(r)}</span></div>
             <div className="ac-scheme-values"><span>Margin <b>{fmt(r.margin, 1)} °C</b></span><span>Rtotal <b>{fmt(r.rtotal, 4)} K/W</b></span><span>ΔP <b>{fmt(r.pressure, 1)} Pa</b></span><span>Tout <b>{fmt(r.tout, 1)} °C</b></span></div>
+            <div className="ac-scheme-thermalpath"><span>Rjc {fmt(r.rjc, 4)}</span><span>R_TIM {fmt(r.rtim, 4)}</span><span>R_base {fmt(r.rbase, 4)}</span><span>R_fin-air {fmt(r.rfinAir, 4)}</span></div>
             <div className="ac-scheme-geometry"><b>{r.length} × {r.width} × {r.height} mm</b><span>Fin {r.finCount} pcs · T {r.finT} mm · Gap {r.gap} mm · Pitch {r.finPitch} mm</span><span>Base {r.baseT} mm · ηfin {fmt(r.eta * 100, 1)}%</span></div>
             <button className="ac-use-scheme" onClick={() => { setLength(r.length); setWidth(r.width); setHeight(r.height); setBaseT(r.baseT); setFinT(r.finT); setGap(r.gap); setFinCount(r.finCount); setMode("forward"); }}>帶入 Forward Analysis</button>
           </article>) : <div className="ac-alert">目前搜尋範圍內沒有可用的幾何候選。請放寬尺寸限制或調整製程與手動參數。</div>}
