@@ -128,12 +128,12 @@ function makeCandidates(base: Geometry, auto: Record<string, boolean>, proc: Pro
   return out;
 }
 function SectionDrawing({ result, axis }: { result: Result; axis: Axis }) {
-  const count = Math.max(1, Math.min(40, result.finCount));
+  const count = Math.max(1, result.finCount);
   const svgW = 320, svgH = 150, pad = 24;
   const innerW = svgW - pad * 2, innerH = svgH - pad * 2;
   const faceWidth = axis === "Y" ? result.length : result.width;
   const faceHeight = axis === "Z" ? result.length : result.height;
-  const finW = Math.max(2, innerW * (result.finT / faceWidth));
+  const finW = Math.max(0.8, innerW * (result.finT / faceWidth));
   const gapW = innerW * (result.gap / faceWidth);
   const total = count * finW + (count - 1) * gapW;
   const start = pad + (innerW - total) / 2;
