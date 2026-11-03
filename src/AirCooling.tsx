@@ -116,8 +116,9 @@ function makeCandidates(base: Geometry, auto: Record<string, boolean>, proc: Pro
     if (constrained && (length > envelope.length || width > envelope.width || height > envelope.height)) continue;
     const candidateFinHeight = axis === "Z" ? length : height;
     if (candidateFinHeight < rule.minH || candidateFinHeight > rule.maxH || finT < rule.minT || finT > rule.maxT || gap < rule.minGap || gap > rule.maxGap) continue;
-    const count = auto.finCount ? Math.max(1, Math.floor((width + gap) / (finT + gap))) : base.finCount;
-    if (count * finT >= width) continue;
+    const finArrayWidth = axis === "Y" ? length : width;
+    const count = auto.finCount ? Math.max(1, Math.floor((finArrayWidth + gap) / (finT + gap))) : base.finCount;
+    if (count * finT >= finArrayWidth) continue;
     out.push({ length, width, height, baseT, finT, gap, finCount: count });
   }
   return out;
@@ -247,9 +248,9 @@ export default function AirCooling() {
           <p className="ac-note">有空間限制時在 Envelope 內搜尋；無限制時先以 70–150 mm 的長寬候選範圍進行初步搜尋，並非無界搜尋。</p>
         </div>}
         <div className="ac-grid">
-          <Field label={mode === "inverse" ? "Length / Max Length" : "Heatsink Length"} value={length} unit="mm" onChange={setLength} disabled={mode === "inverse" && (axis === "Z" ? autoHeight : autoLength)}/>
+          <Field label={axis === "Z" ? "Fin Height (X axis)" : (mode === "inverse" ? "Length / Max Length" : "Heatsink Length")} value={length} unit="mm" onChange={setLength} disabled={mode === "inverse" && (axis === "Z" ? autoHeight : autoLength)}/>
           <Field label={mode === "inverse" ? "Width / Max Width" : "Heatsink Width"} value={width} unit="mm" onChange={setWidth} disabled={mode === "inverse" && autoWidth}/>
-          <Field label={axis === "Z" ? "Fin Height (X axis)" : "Fin Height / Heatsink Height"} value={height} unit="mm" onChange={setHeight} disabled={mode === "inverse" && autoHeight}/>
+          <Field label={axis === "Z" ? "Flow Length (Z axis)" : "Fin Height / Heatsink Height"} value={height} unit="mm" onChange={setHeight} disabled={mode === "inverse" && axis !== "Z" && autoHeight}/>
           <Choice label="Fin Manufacturing Process" value={process} onChange={v => setProcess(v as ProcessKey)} options={Object.entries(processes).map(([k, v]) => [k, v.label]) as [string, string][]}/>
         </div>
         <div className="ac-process-rule"><b>DFM 候選區間</b><span>Fin T {procRule.minT}–{procRule.maxT} mm</span><span>Gap {procRule.minGap}–{procRule.maxGap} mm</span><span>Height {procRule.minH}–{procRule.maxH} mm</span></div>
