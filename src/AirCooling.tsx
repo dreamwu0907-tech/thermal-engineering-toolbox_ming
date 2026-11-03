@@ -285,9 +285,9 @@ export default function AirCooling() {
       <div className="ac-section-title"><div><small>05 / PERFORMANCE RESULTS</small><h2>熱性能與壓差結果</h2></div><span>ENGINEERING ESTIMATE</span></div>
       {!valid ? <div className="ac-alert">輸入條件無效。請確認功耗、溫度、Die / Package 尺寸、TIM 熱阻及風量皆合理，且 Package Size 不小於 Die Size。</div> : <>
         <div className="ac-card ac-budget">
-          <div className="ac-budget-item"><span>Thermal Budget Rtotal,max</span><b>{fmt((tjMax - tin) / power, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Thermal Budget Rtotal,max（以平均空氣溫度為基準）</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
           <div className="ac-budget-item"><span>Rjc + R_TIM</span><b>{fmt(rjc + rtim, 4)} <small>K/W</small></b></div>
-          <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - tin) / power - rjc - rtim, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power - rjc - rtim, 4)} <small>K/W</small></b></div>
         </div>
         {mode === "forward" && result && <div className="ac-card">
           <div className="ac-result-head"><div><span>ESTIMATED JUNCTION TEMPERATURE</span><strong>{fmt(result.tj, 1)} °C</strong></div><span className={"ac-status " + (status(result) === "FAIL" ? "fail" : status(result) === "MARGINAL" ? "marginal" : "pass")}>{status(result)}</span></div>
