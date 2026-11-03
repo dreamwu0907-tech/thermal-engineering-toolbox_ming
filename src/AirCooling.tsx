@@ -156,8 +156,10 @@ export default function AirCooling() {
   const [envelopeMode, setEnvelopeMode] = useState<"limited" | "open">("limited");
   const [axis, setAxis] = useState<Axis>("X");
   const [power, setPower] = useState(500), [tjMax, setTjMax] = useState(85), [tin, setTin] = useState(35);
-  const [dieL, setDieL] = useState(40), [dieW, setDieW] = useState(40), [pkgL, setPkgL] = useState(60), [pkgW, setPkgW] = useState(60);
+  const [dieL, setDieL] = useState(40), [dieW, setDieW] = useState(40);
   const [rjc, setRjc] = useState(0.015), [rtim, setRtim] = useState(0.02);
+  const [timMode, setTimMode] = useState<"material" | "resistance">("material");
+  const [timK, setTimK] = useState(5), [timThickness, setTimThickness] = useState(0.2);
   const [length, setLength] = useState(100), [width, setWidth] = useState(100), [height, setHeight] = useState(40);
   const [baseT, setBaseT] = useState(5), [finT, setFinT] = useState(0.4), [gap, setGap] = useState(0.8), [finCount, setFinCount] = useState(70);
   const [autoT, setAutoT] = useState(true), [autoGap, setAutoGap] = useState(true), [autoHeight, setAutoHeight] = useState(true);
@@ -170,16 +172,17 @@ export default function AirCooling() {
 
   const baseK = baseMat === "custom" ? baseCustomK : materials[baseMat].k;
   const finK = finMat === "custom" ? finCustomK : materials[finMat].k;
+  const effectiveRtim = timMode === "material" ? (timThickness / 1000) / (timK * (dieL * dieW / 1e6)) : rtim;
   const geometry: Geometry = { length, width, height, baseT, finT, gap, finCount };
   const envelope: Geometry = { length: maxL, width: maxW, height: maxH, baseT, finT, gap, finCount };
-  const inputParams = { axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim, dieL, dieW, baseK, finK, process };
-  const result = useMemo(() => evaluate(geometry, inputParams), [length, width, height, baseT, finT, gap, finCount, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim, dieL, dieW, baseK, finK, process]);
+  const inputParams = { axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim: effectiveRtim, dieL, dieW, baseK, finK, process };
+  const result = useMemo(() => evaluate(geometry, inputParams), [length, width, height, baseT, finT, gap, finCount, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, effectiveRtim, dieL, dieW, baseK, finK, process]);
   const candidates = useMemo(() => {
     if (mode !== "inverse") return [];
     const auto = { finT: autoT, gap: autoGap, height: autoHeight, baseT: autoBase, finCount: autoCount, length: autoLength, width: autoWidth };
     return makeCandidates(geometry, auto, process, envelopeMode === "limited", envelope, axis);
   }, [mode, length, width, height, baseT, finT, gap, finCount, autoT, autoGap, autoHeight, autoBase, autoCount, autoLength, autoWidth, process, envelopeMode, maxL, maxW, maxH, axis]);
-  const evaluated = useMemo(() => candidates.map(g => evaluate(g, inputParams)).filter((r): r is Result => !!r && r.dfm), [candidates, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim, dieL, dieW, baseK, finK, process]);
+  const evaluated = useMemo(() => candidates.map(g => evaluate(g, inputParams)).filter((r): r is Result => !!r && r.dfm), [candidates, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, effectiveRtim, dieL, dieW, baseK, finK, process]);
   const ranked = useMemo(() => {
     const pool = evaluated.filter(r => r.feasible);
     const source = pool.length ? pool : evaluated;
@@ -193,7 +196,7 @@ export default function AirCooling() {
   const shown = mode === "inverse" ? ranked : (result ? [result] : []);
   const selected = shown[0];
   const status = (r: Result) => r.margin < 0 ? "FAIL" : r.margin < 3 ? "MARGINAL" : "PASS";
-  const valid = !!result && power > 0 && tjMax > tin && dieL > 0 && dieW > 0 && pkgL >= dieL && pkgW >= dieW && rjc >= 0 && rtim >= 0;
+  const valid = !!result && power > 0 && tjMax > tin && dieL > 0 && dieW > 0 && rjc >= 0 && effectiveRtim >= 0 && (timMode === "resistance" || (timK > 0 && timThickness > 0));
   const procRule = processes[process];
   const inletArea = axis === "X" ? width * height : axis === "Y" ? length * height : length * width;
   const faceVelocity = airMode === "cfm" ? (cfm * 0.00047194745) / (inletArea / 1e6) : lfm * 0.00508;
@@ -216,11 +219,17 @@ export default function AirCooling() {
           <Field label="Rjc（Junction-to-Case）" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
           <Field label="Die Length" value={dieL} unit="mm" onChange={setDieL}/>
           <Field label="Die Width" value={dieW} unit="mm" onChange={setDieW}/>
-          <Field label="Package Length" value={pkgL} unit="mm" onChange={setPkgL}/>
-          <Field label="Package Width" value={pkgW} unit="mm" onChange={setPkgW}/>
-          <Field label="TIM Thermal Resistance" value={rtim} unit="K/W" step={0.001} onChange={setRtim}/>
         </div>
-        <p className="ac-note">Die Size 用於熱源面積與底板熱擴散估算；Package Size 用於封裝幾何檢查。Rjc 與 TIM 熱阻直接輸入，不在此頁反算材料厚度或接觸熱阻。</p>
+        <div className="ac-subtitle">TIM CONFIGURATION</div>
+        <Choice label="TIM Input Method" value={timMode} onChange={v => setTimMode(v as "material" | "resistance")} options={[["material","K 值 + 厚度"],["resistance","直接輸入熱阻值"]]}/>
+        {timMode === "material" ? <div className="ac-grid ac-tim-fields">
+          <Field label="TIM Thermal Conductivity" value={timK} unit="W/m·K" step={0.1} onChange={setTimK}/>
+          <Field label="TIM Thickness" value={timThickness} unit="mm" step={0.01} onChange={setTimThickness}/>
+          <div className="ac-readout"><span>Calculated TIM Thermal Resistance</span><b>{fmt(effectiveRtim, 4)} K/W</b><small>R = t / (k × A_die)</small></div>
+        </div> : <div className="ac-grid ac-tim-fields">
+          <Field label="TIM Thermal Resistance" value={rtim} unit="K/W" step={0.001} onChange={setRtim}/>
+        </div>}
+        <p className="ac-note">Die Size 作為熱源面積與 TIM 接觸面積的估算基準。K 值模式以 R_TIM = 厚度 /（導熱係數 × Die 面積）計算；直接輸入模式不需要設定厚度。</p>
       </div>
     </section>
 
@@ -287,11 +296,11 @@ export default function AirCooling() {
 
     <section className="ac-section">
       <div className="ac-section-title"><div><small>05 / PERFORMANCE RESULTS</small><h2>熱性能與壓差結果</h2></div><span>ENGINEERING ESTIMATE</span></div>
-      {!valid ? <div className="ac-alert">輸入條件無效。請確認功耗、溫度、Die / Package 尺寸、TIM 熱阻及風量皆合理，且 Package Size 不小於 Die Size。</div> : <>
+      {!valid ? <div className="ac-alert">輸入條件無效。請確認功耗、溫度、Die 尺寸、TIM 參數及風量皆合理。</div> : <>
         <div className="ac-card ac-budget">
           <div className="ac-budget-item"><span>Thermal Budget Rtotal,max（依目前幾何平均空氣溫度）</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
-          <div className="ac-budget-item"><span>Rjc + R_TIM</span><b>{fmt(rjc + rtim, 4)} <small>K/W</small></b></div>
-          <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power - rjc - rtim, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Rjc + R_TIM</span><b>{fmt(rjc + effectiveRtim, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power - rjc - effectiveRtim, 4)} <small>K/W</small></b></div>
         </div>
         {mode === "forward" && result && <div className="ac-card">
           <div className="ac-result-head"><div><span>ESTIMATED JUNCTION TEMPERATURE</span><strong>{fmt(result.tj, 1)} °C</strong></div><span className={"ac-status " + (status(result) === "FAIL" ? "fail" : status(result) === "MARGINAL" ? "marginal" : "pass")}>{status(result)}</span></div>
