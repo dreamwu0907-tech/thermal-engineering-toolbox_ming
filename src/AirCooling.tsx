@@ -31,10 +31,10 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const unique = (xs: number[]) => [...new Set(xs.map(x => Math.round(x * 1000) / 1000))];
 const fmt = (v: number, d = 2) => Number.isFinite(v) ? v.toFixed(d) : "—";
 
-function Field({ label, value, unit, onChange, step = 1, min = 0 }: {
-  label: string; value: number; unit: string; onChange: (v: number) => void; step?: number; min?: number;
+function Field({ label, value, unit, onChange, step = 1, min = 0, disabled = false }: {
+  label: string; value: number; unit: string; onChange: (v: number) => void; step?: number; min?: number; disabled?: boolean;
 }) {
-  return <label className="ac-field"><span>{label}</span><div className="ac-input"><input type="number" min={min} step={step} value={value} onChange={e => onChange(Number(e.target.value))}/><small>{unit}</small></div></label>;
+  return <label className="ac-field"><span>{label}</span><div className={"ac-input" + (disabled ? " is-disabled" : "")}><input type="number" min={min} step={step} value={value} disabled={disabled} onChange={e => onChange(Number(e.target.value))}/><small>{unit}</small></div></label>;
 }
 function Choice({ label, value, options, onChange }: {
   label: string; value: string; options: [string, string][]; onChange: (v: string) => void;
@@ -62,8 +62,8 @@ function evaluate(g: Geometry, p: {
   const q = p.airMode === "cfm" ? p.cfm * 0.00047194745 : (p.lfm * 0.00508) * inletArea;
   if (!(q > 0)) return null;
   const faceVelocity = q / inletArea;
-  const openWidth = finWidth - g.finCount * g.finT / 1000;
-  const openArea = openWidth * finHeight / 1e6;
+  const openWidth = (finWidth - g.finCount * g.finT) / 1000;
+  const openArea = openWidth * (finHeight / 1000);
   if (!(openWidth > 0 && openArea > 0 && g.finCount >= 1 && g.gap > 0 && g.finT > 0)) return null;
   const channelVelocity = q / openArea;
   const gapM = g.gap / 1000, heightM = finHeight / 1000, lengthM = flowLength / 1000;
@@ -75,7 +75,7 @@ function evaluate(g: Geometry, p: {
   const m = Math.sqrt((2 * h) / (p.finK * finTM));
   const eta = m * heightM > 0 ? Math.tanh(m * heightM) / (m * heightM) : 1;
   const finArea = 2 * g.finCount * lengthM * heightM;
-  const exposedBaseArea = Math.max(0, lengthM * (finWidth / 1000 - g.finCount * finTM));
+  const exposedBaseArea = Math.max(0, lengthM * openWidth);
   const effectiveArea = eta * finArea + exposedBaseArea;
   const rfinAir = 1 / Math.max(h * effectiveArea, 1e-9);
   const dieArea = p.dieL * p.dieW / 1e6;
@@ -135,7 +135,7 @@ function SectionDrawing({ result, axis }: { result: Result; axis: Axis }) {
       {Array.from({ length: count }, (_, i) => <rect key={i} x={start + i * (finW + gapW)} y={pad + 4} width={finW} height={innerH - 8} fill="#b8ef6b" opacity=".9"/>)}
       {Array.from({ length: 5 }, (_, i) => <g key={i} stroke="#83b9ca" strokeWidth="1.5" fill="none"><path d={"M " + (pad + 7 + i * (innerW / 5)) + " 8 v 10 m -4 -4 l 4 4 l 4 -4"}/></g>)}
       <path d={"M " + (pad + innerW / 2) + " 5 V 20"} stroke="#83b9ca" strokeWidth="1.5"/>
-      <text x={width / 2} y={height - 5} textAnchor="middle" fill="#9aabb3" fontSize="9">Airflow direction: " + axis + "</text>
+      <text x={width / 2} y={height - 5} textAnchor="middle" fill="#9aabb3" fontSize="9">{"Airflow direction: " + axis}</text>
     </svg>
     <div className="ac-drawing-legend"><span><i className="ac-fin-key"/> Fin</span><span><i className="ac-gap-key"/> Fin Gap</span><span>入口截面非實際比例渲染</span></div>
   </div>;
@@ -148,7 +148,7 @@ export default function AirCooling() {
   const [axis, setAxis] = useState<Axis>("X");
   const [power, setPower] = useState(500), [tjMax, setTjMax] = useState(85), [tin, setTin] = useState(35);
   const [dieL, setDieL] = useState(40), [dieW, setDieW] = useState(40), [pkgL, setPkgL] = useState(60), [pkgW, setPkgW] = useState(60);
-  const [rjc, setRjc] = useState(0.015), [rtim, setRtim] = useState(0.1);
+  const [rjc, setRjc] = useState(0.015), [rtim, setRtim] = useState(0.02);
   const [length, setLength] = useState(100), [width, setWidth] = useState(100), [height, setHeight] = useState(40);
   const [baseT, setBaseT] = useState(5), [finT, setFinT] = useState(0.4), [gap, setGap] = useState(0.8), [finCount, setFinCount] = useState(70);
   const [autoT, setAutoT] = useState(true), [autoGap, setAutoGap] = useState(true), [autoHeight, setAutoHeight] = useState(true);
@@ -177,8 +177,10 @@ export default function AirCooling() {
     const thermal = [...source].sort((a, b) => a.tj - b.tj)[0];
     const pressure = [...source].sort((a, b) => a.pressure - b.pressure)[0];
     const compact = [...source].sort((a, b) => a.volume - b.volume)[0];
-    return [thermal, pressure, compact].filter((r, i, arr): r is Result => !!r && arr.findIndex(x => x && x.length === r.length && x.width === r.width && x.height === r.height && x.finT === r.finT && x.gap === r.gap && x.baseT === r.baseT) === i);
-  }, [evaluated]);
+    const preferred = objective === "thermal" ? thermal : compact;
+    const ordered = [preferred, pressure, objective === "thermal" ? compact : thermal];
+    return ordered.filter((r, i, arr): r is Result => !!r && arr.findIndex(x => x && x.length === r.length && x.width === r.width && x.height === r.height && x.finT === r.finT && x.gap === r.gap && x.baseT === r.baseT) === i);
+  }, [evaluated, objective]);
   const shown = mode === "inverse" ? ranked : (result ? [result] : []);
   const selected = shown[0];
   const status = (r: Result) => r.margin < 0 ? "FAIL" : r.margin < 3 ? "MARGINAL" : "PASS";
@@ -241,19 +243,19 @@ export default function AirCooling() {
           <p className="ac-note">有空間限制時在 Envelope 內搜尋；無限制時先以 70–150 mm 的長寬候選範圍進行初步搜尋，並非無界搜尋。</p>
         </div>}
         <div className="ac-grid">
-          <Field label={mode === "inverse" ? "Length / Max Length" : "Heatsink Length"} value={length} unit="mm" onChange={setLength}/>
-          <Field label={mode === "inverse" ? "Width / Max Width" : "Heatsink Width"} value={width} unit="mm" onChange={setWidth}/>
-          <Field label="Fin Height / Heatsink Height" value={height} unit="mm" onChange={setHeight}/>
+          <Field label={mode === "inverse" ? "Length / Max Length" : "Heatsink Length"} value={length} unit="mm" onChange={setLength} disabled={mode === "inverse" && autoLength}/>
+          <Field label={mode === "inverse" ? "Width / Max Width" : "Heatsink Width"} value={width} unit="mm" onChange={setWidth} disabled={mode === "inverse" && autoWidth}/>
+          <Field label="Fin Height / Heatsink Height" value={height} unit="mm" onChange={setHeight} disabled={mode === "inverse" && autoHeight}/>
           <Choice label="Fin Manufacturing Process" value={process} onChange={v => setProcess(v as ProcessKey)} options={Object.entries(processes).map(([k, v]) => [k, v.label]) as [string, string][]}/>
         </div>
         <div className="ac-process-rule"><b>DFM 候選區間</b><span>Fin T {procRule.minT}–{procRule.maxT} mm</span><span>Gap {procRule.minGap}–{procRule.maxGap} mm</span><span>Height {procRule.minH}–{procRule.maxH} mm</span></div>
         <div className="ac-subtitle">Fin Geometry Control</div>
         <div className="ac-geometry-grid">
-          <div><Toggle label="Fin Thickness" value={autoT} onChange={setAutoT}/><Field label="Fin Thickness" value={finT} unit="mm" step={0.05} onChange={setFinT}/></div>
-          <div><Toggle label="Fin Gap" value={autoGap} onChange={setAutoGap}/><Field label="Fin Gap" value={gap} unit="mm" step={0.05} onChange={setGap}/></div>
-          <div><Toggle label="Fin Height" value={autoHeight} onChange={setAutoHeight}/><Field label="Fin Height" value={height} unit="mm" onChange={setHeight}/></div>
-          <div><Toggle label="Fin Quantity" value={autoCount} onChange={setAutoCount}/><Field label="Fin Quantity" value={finCount} unit="pcs" onChange={setFinCount}/></div>
-          <div><Toggle label="Base Thickness" value={autoBase} onChange={setAutoBase}/><Field label="Base Thickness" value={baseT} unit="mm" step={0.5} onChange={setBaseT}/></div>
+          <div>{mode === "inverse" && <Toggle label="Fin Thickness" value={autoT} onChange={setAutoT}/>}<Field label="Fin Thickness" value={finT} unit="mm" step={0.05} onChange={setFinT} disabled={mode === "inverse" && autoT}/></div>
+          <div>{mode === "inverse" && <Toggle label="Fin Gap" value={autoGap} onChange={setAutoGap}/>}<Field label="Fin Gap" value={gap} unit="mm" step={0.05} onChange={setGap} disabled={mode === "inverse" && autoGap}/></div>
+          <div>{mode === "inverse" && <Toggle label="Fin Height" value={autoHeight} onChange={setAutoHeight}/>}<span className="ac-auto-caption">{mode === "inverse" && autoHeight ? "Height selected by search" : "Set in overall dimensions"}</span></div>
+          <div>{mode === "inverse" && <Toggle label="Fin Quantity" value={autoCount} onChange={setAutoCount}/>}<Field label="Fin Quantity" value={finCount} unit="pcs" onChange={setFinCount} disabled={mode === "inverse" && autoCount}/></div>
+          <div>{mode === "inverse" && <Toggle label="Base Thickness" value={autoBase} onChange={setAutoBase}/>}<Field label="Base Thickness" value={baseT} unit="mm" step={0.5} onChange={setBaseT} disabled={mode === "inverse" && autoBase}/></div>
           {mode === "inverse" && <><div><Toggle label="Heatsink Length" value={autoLength} onChange={setAutoLength}/></div><div><Toggle label="Heatsink Width" value={autoWidth} onChange={setAutoWidth}/></div></>}
         </div>
         <p className="ac-note">Fin Pitch = Fin Thickness + Fin Gap。Fin Quantity 可手動指定或依可用寬度自動計算；自動搜尋僅在所選製程候選 DFM 區間內進行。</p>
@@ -296,11 +298,11 @@ export default function AirCooling() {
             ].map(([name, value]) => <div className="ac-bar-row" key={String(name)}><span>{name}</span><b>{fmt(Number(value), 4)} K/W</b><i style={{ width: Math.max(2, Number(value) / result.rtotal * 100) + "%" }}/><small>ΔT {fmt(power * Number(value), 1)} °C</small></div>)}</div>
             <div><h3>Inlet Cross Section</h3><SectionDrawing result={result} axis={axis}/><p className="ac-note">入風面 {axis} · Face Velocity {fmt(result.faceVelocity, 2)} m/s · Channel Velocity {fmt(result.channelVelocity, 2)} m/s</p></div>
           </div>
-          <div className="ac-geometry-summary"><span>Size {result.length} × {result.width} × {result.height} mm</span><span>Fin {result.finCount} pcs</span><span>T / Gap / Pitch {result.finT} / {result.gap} / {result.finPitch} mm</span><span>Fin Efficiency {fmt(result.eta * 100, 1)}%</span></div>
+          <div className="ac-geometry-summary"><span>Size {result.length} × {result.width} × {result.height} mm</span><span>Fin {result.finCount} pcs · {result.dfm ? "DFM range" : "Check DFM"}</span><span>T / Gap / Pitch {result.finT} / {result.gap} / {result.finPitch} mm</span><span>Fin Efficiency {fmt(result.eta * 100, 1)}%</span></div>
         </div>}
         {mode === "inverse" && <div className="ac-scheme-grid">
           {shown.length ? shown.map((r, i) => <article className="ac-card ac-scheme" key={r.length + "-" + r.width + "-" + r.finT + "-" + r.gap + "-" + r.baseT}>
-            <div className="ac-scheme-title"><span>SCHEME 0{i + 1}</span><b>{i === 0 ? "Thermal Performance" : i === 1 ? "Low Pressure Drop" : "Compact Design"}</b></div>
+            <div className="ac-scheme-title"><span>SCHEME 0{i + 1}</span><b>{i === 0 ? (objective === "thermal" ? "Thermal Performance" : "Compact Design") : i === 1 ? "Low Pressure Drop" : (objective === "thermal" ? "Compact Design" : "Thermal Performance")}</b></div>
             <div className="ac-scheme-main"><strong>{fmt(r.tj, 1)} °C</strong><span className={"ac-status " + (status(r) === "FAIL" ? "fail" : status(r) === "MARGINAL" ? "marginal" : "pass")}>{status(r)}</span></div>
             <div className="ac-scheme-values"><span>Margin <b>{fmt(r.margin, 1)} °C</b></span><span>Rtotal <b>{fmt(r.rtotal, 4)} K/W</b></span><span>ΔP <b>{fmt(r.pressure, 1)} Pa</b></span><span>Tout <b>{fmt(r.tout, 1)} °C</b></span></div>
             <div className="ac-scheme-geometry"><b>{r.length} × {r.width} × {r.height} mm</b><span>Fin {r.finCount} pcs · T {r.finT} mm · Gap {r.gap} mm · Pitch {r.finPitch} mm</span><span>Base {r.baseT} mm · ηfin {fmt(r.eta * 100, 1)}%</span></div>
