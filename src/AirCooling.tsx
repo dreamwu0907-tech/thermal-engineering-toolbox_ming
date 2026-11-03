@@ -10,8 +10,8 @@ type Geometry = { length: number; width: number; height: number; baseT: number; 
 type Result = Geometry & {
   finPitch: number; flowLength: number; inletArea: number; openArea: number;
   faceVelocity: number; channelVelocity: number; reynolds: number; h: number;
-  eta: number; rjc: number; rtim: number; rbase: number; rfinAir: number;
-  rtotal: number; tout: number; tj: number; margin: number; pressure: number;
+  eta: number; rtim: number; rbase: number; rfinAir: number;
+  rtotal: number; tout: number; tc: number; margin: number; pressure: number;
   volume: number; feasible: boolean; dfm: boolean; dfmTier: DfmTier;
 };
 const materials: Record<string, Material> = {
@@ -47,8 +47,8 @@ function Toggle({ label, value, onChange }: { label: string; value: boolean; onC
 }
 
 function evaluate(g: Geometry, p: {
-  axis: Axis; power: number; tjMax: number; tin: number; cfm: number; lfm: number;
-  airMode: "cfm" | "lfm"; rjc: number; rtim: number; dieL: number; dieW: number;
+  axis: Axis; power: number; tcMax: number; tin: number; cfm: number; lfm: number;
+  airMode: "cfm" | "lfm"; rtim: number; dieL: number; dieW: number;
   baseK: number; finK: number; process: ProcessKey;
 }): Result | null {
   const dims = { X: g.length, Y: g.width, Z: g.height };
@@ -88,8 +88,8 @@ function evaluate(g: Geometry, p: {
   const massFlow = air.rho * q;
   const tout = p.tin + p.power / (massFlow * air.cp);
   const meanAir = (p.tin + tout) / 2;
-  const rtotal = p.rjc + p.rtim + rbase + rfinAir;
-  const tj = meanAir + p.power * rtotal;
+  const rtotal = p.rtim + rbase + rfinAir;
+  const tc = meanAir + p.power * rtotal;
   const f = reynolds < 2300 ? 64 / Math.max(reynolds, 1) : 0.3164 / Math.pow(reynolds, 0.25);
   const pressure = (f * (lengthM / dh) + 2.5) * (air.rho * channelVelocity * channelVelocity / 2);
   const proc = processes[p.process];
@@ -99,9 +99,9 @@ function evaluate(g: Geometry, p: {
   const dfm = recommended;
   return {
     ...g, finPitch: g.finT + g.gap, flowLength, inletArea, openArea, faceVelocity,
-    channelVelocity, reynolds, h, eta, rjc: p.rjc, rtim: p.rtim, rbase, rfinAir,
-    rtotal, tout, tj, margin: p.tjMax - tj, pressure, volume: g.length * g.width * g.height,
-    feasible: tj <= p.tjMax, dfm, dfmTier,
+    channelVelocity, reynolds, h, eta, rtim: p.rtim, rbase, rfinAir,
+    rtotal, tout, tc, margin: p.tcMax - tc, pressure, volume: g.length * g.width * g.height,
+    feasible: tc <= p.tcMax, dfm, dfmTier,
   };
 }
 
@@ -155,9 +155,9 @@ export default function AirCooling() {
   const [objective, setObjective] = useState<Objective>("thermal");
   const [envelopeMode, setEnvelopeMode] = useState<"limited" | "open">("limited");
   const [axis, setAxis] = useState<Axis>("X");
-  const [power, setPower] = useState(500), [tjMax, setTjMax] = useState(85), [tin, setTin] = useState(35);
+  const [power, setPower] = useState(500), [tcMax, setTcMax] = useState(75), [tin, setTin] = useState(35);
   const [dieL, setDieL] = useState(40), [dieW, setDieW] = useState(40);
-  const [rjc, setRjc] = useState(0.015), [rtim, setRtim] = useState(0.02);
+  const [rtim, setRtim] = useState(0.02);
   const [timMode, setTimMode] = useState<"material" | "resistance">("material");
   const [timK, setTimK] = useState(5), [timThickness, setTimThickness] = useState(0.2);
   const [length, setLength] = useState(100), [width, setWidth] = useState(100), [height, setHeight] = useState(40);
@@ -175,18 +175,18 @@ export default function AirCooling() {
   const effectiveRtim = timMode === "material" ? (timThickness / 1000) / (timK * (dieL * dieW / 1e6)) : rtim;
   const geometry: Geometry = { length, width, height, baseT, finT, gap, finCount };
   const envelope: Geometry = { length: maxL, width: maxW, height: maxH, baseT, finT, gap, finCount };
-  const inputParams = { axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim: effectiveRtim, dieL, dieW, baseK, finK, process };
-  const result = useMemo(() => evaluate(geometry, inputParams), [length, width, height, baseT, finT, gap, finCount, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, effectiveRtim, dieL, dieW, baseK, finK, process]);
+  const inputParams = { axis, power, tcMax, tin, cfm, lfm, airMode, rtim: effectiveRtim, dieL, dieW, baseK, finK, process };
+  const result = useMemo(() => evaluate(geometry, inputParams), [length, width, height, baseT, finT, gap, finCount, axis, power, tcMax, tin, cfm, lfm, airMode, effectiveRtim, dieL, dieW, baseK, finK, process]);
   const candidates = useMemo(() => {
     if (mode !== "inverse") return [];
     const auto = { finT: autoT, gap: autoGap, height: autoHeight, baseT: autoBase, finCount: autoCount, length: autoLength, width: autoWidth };
     return makeCandidates(geometry, auto, process, envelopeMode === "limited", envelope, axis);
   }, [mode, length, width, height, baseT, finT, gap, finCount, autoT, autoGap, autoHeight, autoBase, autoCount, autoLength, autoWidth, process, envelopeMode, maxL, maxW, maxH, axis]);
-  const evaluated = useMemo(() => candidates.map(g => evaluate(g, inputParams)).filter((r): r is Result => !!r && r.dfm), [candidates, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, effectiveRtim, dieL, dieW, baseK, finK, process]);
+  const evaluated = useMemo(() => candidates.map(g => evaluate(g, inputParams)).filter((r): r is Result => !!r && r.dfm), [candidates, axis, power, tcMax, tin, cfm, lfm, airMode, effectiveRtim, dieL, dieW, baseK, finK, process]);
   const ranked = useMemo(() => {
     const pool = evaluated.filter(r => r.feasible);
     const source = pool.length ? pool : evaluated;
-    const thermal = [...source].sort((a, b) => a.tj - b.tj)[0];
+    const thermal = [...source].sort((a, b) => a.tc - b.tc)[0];
     const pressure = [...source].sort((a, b) => a.pressure - b.pressure)[0];
     const compact = [...source].sort((a, b) => a.volume - b.volume)[0];
     const preferred = objective === "thermal" ? thermal : compact;
@@ -196,7 +196,7 @@ export default function AirCooling() {
   const shown = mode === "inverse" ? ranked : (result ? [result] : []);
   const selected = shown[0];
   const status = (r: Result) => r.margin < 0 ? "FAIL" : r.margin < 3 ? "MARGINAL" : "PASS";
-  const valid = !!result && power > 0 && tjMax > tin && dieL > 0 && dieW > 0 && rjc >= 0 && effectiveRtim >= 0 && (timMode === "resistance" || (timK > 0 && timThickness > 0));
+  const valid = !!result && power > 0 && tcMax > tin && dieL > 0 && dieW > 0 && effectiveRtim >= 0 && (timMode === "resistance" || (timK > 0 && timThickness > 0));
   const procRule = processes[process];
   const inletArea = axis === "X" ? width * height : axis === "Y" ? length * height : length * width;
   const faceVelocity = airMode === "cfm" ? (cfm * 0.00047194745) / (inletArea / 1e6) : lfm * 0.00508;
@@ -214,9 +214,8 @@ export default function AirCooling() {
       <div className="ac-card">
         <div className="ac-grid">
           <Field label="晶片功耗 Power" value={power} unit="W" onChange={setPower}/>
-          <Field label="最高接面溫度 Tj Max" value={tjMax} unit="°C" onChange={setTjMax}/>
+          <Field label="最高 Case 溫度 Tc Max" value={tcMax} unit="°C" onChange={setTcMax}/>
           <Field label="入口空氣溫度 Tin" value={tin} unit="°C" onChange={setTin}/>
-          <Field label="Rjc（Junction-to-Case）" value={rjc} unit="K/W" step={0.001} onChange={setRjc}/>
           <Field label="Die Length" value={dieL} unit="mm" onChange={setDieL}/>
           <Field label="Die Width" value={dieW} unit="mm" onChange={setDieW}/>
         </div>
@@ -257,7 +256,7 @@ export default function AirCooling() {
             <Field label="Maximum Width" value={maxW} unit="mm" onChange={setMaxW}/>
             <Field label="Maximum Height" value={maxH} unit="mm" onChange={setMaxH}/>
           </div>}
-          <Choice label="最佳化目標" value={objective} onChange={v => setObjective(v as Objective)} options={[["thermal","A · 達標／散熱性能優先"],["compact","B · 符合 Tj 下最小尺寸"]]}/>
+          <Choice label="最佳化目標" value={objective} onChange={v => setObjective(v as Objective)} options={[["thermal","A · Tc 達標／散熱性能優先"],["compact","B · 符合 Tc 下最小尺寸"]]}/>
           <p className="ac-note">有空間限制時在 Envelope 內搜尋；無限制時先以 70–150 mm 的長寬候選範圍進行初步搜尋，並非無界搜尋。</p>
         </div>}
         <div className="ac-grid">
@@ -298,21 +297,21 @@ export default function AirCooling() {
       <div className="ac-section-title"><div><small>05 / PERFORMANCE RESULTS</small><h2>熱性能與壓差結果</h2></div><span>ENGINEERING ESTIMATE</span></div>
       {!valid ? <div className="ac-alert">輸入條件無效。請確認功耗、溫度、Die 尺寸、TIM 參數及風量皆合理。</div> : <>
         <div className="ac-card ac-budget">
-          <div className="ac-budget-item"><span>Thermal Budget Rtotal,max（依目前幾何平均空氣溫度）</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
-          <div className="ac-budget-item"><span>Rjc + R_TIM</span><b>{fmt(rjc + effectiveRtim, 4)} <small>K/W</small></b></div>
-          <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power - rjc - effectiveRtim, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Case-to-Air Thermal Budget Rcase-air,max（依目前幾何平均空氣溫度）</span><b>{fmt((tcMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>R_TIM</span><b>{fmt(effectiveRtim, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Available Base + Fin-to-Air Rth</span><b>{fmt((tcMax - (tin + result!.tout) / 2) / power - effectiveRtim, 4)} <small>K/W</small></b></div>
         </div>
         {mode === "forward" && result && <div className="ac-card">
-          <div className="ac-result-head"><div><span>ESTIMATED JUNCTION TEMPERATURE</span><strong>{fmt(result.tj, 1)} °C</strong></div><span className={"ac-status " + (status(result) === "FAIL" ? "fail" : status(result) === "MARGINAL" ? "marginal" : "pass")}>{status(result)}</span></div>
+          <div className="ac-result-head"><div><span>ESTIMATED CASE TEMPERATURE</span><strong>{fmt(result.tc, 1)} °C</strong></div><span className={"ac-status " + (status(result) === "FAIL" ? "fail" : status(result) === "MARGINAL" ? "marginal" : "pass")}>{status(result)}</span></div>
           <div className="ac-kpi-grid">
             <div><span>Thermal Margin</span><b>{fmt(result.margin, 1)} °C</b></div>
-            <div><span>Total Thermal Resistance</span><b>{fmt(result.rtotal, 4)} K/W</b></div>
+            <div><span>Case-to-Air Thermal Resistance</span><b>{fmt(result.rtotal, 4)} K/W</b></div>
             <div><span>Heatsink Pressure Drop</span><b>{fmt(result.pressure, 1)} Pa</b></div>
             <div><span>Outlet Air Temperature</span><b>{fmt(result.tout, 1)} °C</b></div>
           </div>
           <div className="ac-result-columns">
             <div><h3>Thermal Path Breakdown</h3>{[
-              ["Rjc", result.rjc], ["R_TIM", result.rtim], ["R_base", result.rbase], ["R_fin-air", result.rfinAir],
+              ["R_TIM", result.rtim], ["R_base", result.rbase], ["R_fin-air", result.rfinAir],
             ].map(([name, value]) => <div className="ac-bar-row" key={String(name)}><span>{name}</span><b>{fmt(Number(value), 4)} K/W</b><i style={{ width: Math.max(2, Number(value) / result.rtotal * 100) + "%" }}/><small>ΔT {fmt(power * Number(value), 1)} °C</small></div>)}</div>
             <div><h3>Inlet Cross Section</h3><SectionDrawing result={result} axis={axis}/><p className="ac-note">入風面 {axis} · Face Velocity {fmt(result.faceVelocity, 2)} m/s · Channel Velocity {fmt(result.channelVelocity, 2)} m/s</p></div>
           </div>
@@ -321,14 +320,14 @@ export default function AirCooling() {
         {mode === "inverse" && <div className="ac-scheme-grid">
           {shown.length ? shown.map((r, i) => <article className="ac-card ac-scheme" key={r.length + "-" + r.width + "-" + r.finT + "-" + r.gap + "-" + r.baseT}>
             <div className="ac-scheme-title"><span>SCHEME 0{i + 1}</span><b>{i === 0 ? (objective === "thermal" ? "Thermal Performance" : "Compact Design") : i === 1 ? "Low Pressure Drop" : (objective === "thermal" ? "Compact Design" : "Thermal Performance")}</b></div>
-            <div className="ac-scheme-main"><strong>{fmt(r.tj, 1)} °C</strong><span className={"ac-status " + (status(r) === "FAIL" ? "fail" : status(r) === "MARGINAL" ? "marginal" : "pass")}>{status(r)}</span></div>
+            <div className="ac-scheme-main"><strong>{fmt(r.tc, 1)} °C</strong><span className={"ac-status " + (status(r) === "FAIL" ? "fail" : status(r) === "MARGINAL" ? "marginal" : "pass")}>{status(r)}</span></div>
             <div className="ac-scheme-values"><span>Margin <b>{fmt(r.margin, 1)} °C</b></span><span>Rtotal <b>{fmt(r.rtotal, 4)} K/W</b></span><span>ΔP <b>{fmt(r.pressure, 1)} Pa</b></span><span>Tout <b>{fmt(r.tout, 1)} °C</b></span></div>
-            <div className="ac-scheme-thermalpath"><span>Rjc {fmt(r.rjc, 4)}</span><span>R_TIM {fmt(r.rtim, 4)}</span><span>R_base {fmt(r.rbase, 4)}</span><span>R_fin-air {fmt(r.rfinAir, 4)}</span></div>
+            <div className="ac-scheme-thermalpath"><span>R_TIM {fmt(r.rtim, 4)}</span><span>R_base {fmt(r.rbase, 4)}</span><span>R_fin-air {fmt(r.rfinAir, 4)}</span></div>
             <div className="ac-scheme-geometry"><b>{r.length} × {r.width} × {r.height} mm</b><span>Fin {r.finCount} pcs · T {r.finT} mm · Gap {r.gap} mm · Pitch {r.finPitch} mm</span><span>Base {r.baseT} mm · ηfin {fmt(r.eta * 100, 1)}%</span></div>
             <button className="ac-use-scheme" onClick={() => { setLength(r.length); setWidth(r.width); setHeight(r.height); setBaseT(r.baseT); setFinT(r.finT); setGap(r.gap); setFinCount(r.finCount); setMode("forward"); }}>帶入 Forward Analysis</button>
           </article>) : <div className="ac-alert">目前搜尋範圍內沒有可用的幾何候選。請放寬尺寸限制或調整製程與手動參數。</div>}
         </div>}
-        {selected && <div className="ac-card ac-result-note"><b>模型假設與限制</b><p>本結果為簡化 1D 熱阻與空氣側壓差估算：以平均空氣溫度計算接面溫度，使用簡化內流道 Nu / Darcy friction factor 關係式；未納入風扇工作點、旁通漏風、流量不均、鰭片入口效應、接觸熱阻分布及 CFD 三維效應。異材底板／鰭片忽略接合界面熱阻。結果應用於前期設計比較，不可取代樣品測試與 CFD 驗證。</p><p>PASS：Tj 低於上限且 Margin ≥ 3°C；MARGINAL：0–3°C；FAIL：超過 Tj Max。壓差只代表散熱器入口至出口，不代表整機系統壓降。未設定壓差硬性門檻，僅供方案比較。</p></div>}
+        {selected && <div className="ac-card ac-result-note"><b>模型假設與限制</b><p>本結果為簡化 1D 熱阻與空氣側壓差估算：以平均空氣溫度計算 Case 溫度，使用簡化內流道 Nu / Darcy friction factor 關係式；未納入風扇工作點、旁通漏風、流量不均、鰭片入口效應、接觸熱阻分布及 CFD 三維效應。異材底板／鰭片忽略接合界面熱阻。結果應用於前期設計比較，不可取代樣品測試與 CFD 驗證。</p><p>PASS：Tc 低於上限且 Margin ≥ 3°C；MARGINAL：0–3°C；FAIL：超過 Tc Max。此模型以 Case Temperature 為熱判定基準，不含 Junction-to-Case 熱阻，因此不能據此保證 Tc 符合規格。壓差只代表散熱器入口至出口，不代表整機系統壓降。未設定壓差硬性門檻，僅供方案比較。</p></div>}
       </>}
     </section>
     <footer className="ac-footer"><span>THERMAL ENGINEERING TOOLBOX</span><span>Forced-air heatsink · preliminary engineering model</span></footer>
