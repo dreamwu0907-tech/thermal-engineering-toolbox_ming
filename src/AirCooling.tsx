@@ -92,7 +92,7 @@ function evaluate(g: Geometry, p: {
   const f = reynolds < 2300 ? 64 / Math.max(reynolds, 1) : 0.3164 / Math.pow(reynolds, 0.25);
   const pressure = (f * (lengthM / dh) + 2.5) * (air.rho * channelVelocity * channelVelocity / 2);
   const proc = processes[p.process];
-  const dfm = g.finT >= proc.minT && g.finT <= proc.maxT && g.gap >= proc.minGap && g.gap <= proc.maxGap && g.height >= proc.minH && g.height <= proc.maxH;
+  const dfm = g.finT >= proc.minT && g.finT <= proc.maxT && g.gap >= proc.minGap && g.gap <= proc.maxGap && finHeight >= proc.minH && finHeight <= proc.maxH;
   return {
     ...g, finPitch: g.finT + g.gap, flowLength, inletArea, openArea, faceVelocity,
     channelVelocity, reynolds, h, eta, rjc: p.rjc, rtim: p.rtim, rbase, rfinAir,
@@ -101,46 +101,50 @@ function evaluate(g: Geometry, p: {
   };
 }
 
-function makeCandidates(base: Geometry, auto: Record<string, boolean>, proc: ProcessKey, constrained: boolean, envelope: Geometry): Geometry[] {
+function makeCandidates(base: Geometry, auto: Record<string, boolean>, proc: ProcessKey, constrained: boolean, envelope: Geometry, axis: Axis): Geometry[] {
   const rule = processes[proc];
   const tValues = auto.finT ? unique([rule.minT, (rule.minT + rule.maxT) / 2, rule.maxT]) : [base.finT];
   const gapValues = auto.gap ? unique([rule.minGap, (rule.minGap + rule.maxGap) / 2, rule.maxGap]) : [base.gap];
-  const hValues = auto.height ? unique([rule.minH, clamp(base.height, rule.minH, rule.maxH), rule.maxH]) : [base.height];
+  const baseFinHeight = axis === "Z" ? base.length : base.height;
+  const hValues = auto.height ? unique([rule.minH, clamp(baseFinHeight, rule.minH, rule.maxH), rule.maxH]) : [baseFinHeight];
   const bValues = auto.baseT ? [2, 3, 5, 8, 10] : [base.baseT];
-  const lValues = auto.length ? (constrained ? unique([0.6, 0.8, 1].map(f => envelope.length * f)) : [70, 90, 110, 130, 150]) : [base.length];
+  const lValues = axis === "Z" && auto.height ? hValues : auto.length && axis !== "Z" ? (constrained ? unique([0.6, 0.8, 1].map(f => envelope.length * f)) : [70, 90, 110, 130, 150]) : [base.length];
   const wValues = auto.width ? (constrained ? unique([0.6, 0.8, 1].map(f => envelope.width * f)) : [70, 90, 110, 130, 150]) : [base.width];
   const out: Geometry[] = [];
-  for (const length of lValues) for (const width of wValues) for (const height of hValues)
+  for (const length of lValues) for (const width of wValues) for (const height of (axis === "Z" ? [base.height] : hValues))
   for (const baseT of bValues) for (const finT of tValues) for (const gap of gapValues) {
     if (constrained && (length > envelope.length || width > envelope.width || height > envelope.height)) continue;
-    if (height < rule.minH || height > rule.maxH || finT < rule.minT || finT > rule.maxT || gap < rule.minGap || gap > rule.maxGap) continue;
+    const candidateFinHeight = axis === "Z" ? length : height;
+    if (candidateFinHeight < rule.minH || candidateFinHeight > rule.maxH || finT < rule.minT || finT > rule.maxT || gap < rule.minGap || gap > rule.maxGap) continue;
     const count = auto.finCount ? Math.max(1, Math.floor((width + gap) / (finT + gap))) : base.finCount;
     if (count * finT >= width) continue;
     out.push({ length, width, height, baseT, finT, gap, finCount: count });
   }
   return out;
 }
-
 function SectionDrawing({ result, axis }: { result: Result; axis: Axis }) {
   const count = Math.max(1, Math.min(40, result.finCount));
-  const width = 320, height = 150, pad = 24;
-  const innerW = width - pad * 2, innerH = height - pad * 2;
-  const finW = Math.max(2, innerW * (result.finT / result.width));
-  const gapW = innerW * (result.gap / result.width);
+  const svgW = 320, svgH = 150, pad = 24;
+  const innerW = svgW - pad * 2, innerH = svgH - pad * 2;
+  const faceWidth = axis === "Y" ? result.length : result.width;
+  const faceHeight = axis === "Z" ? result.length : result.height;
+  const finW = Math.max(2, innerW * (result.finT / faceWidth));
+  const gapW = innerW * (result.gap / faceWidth);
   const total = count * finW + (count - 1) * gapW;
   const start = pad + (innerW - total) / 2;
+  const openAreaMm2 = result.openArea * 1e6;
   return <div className="ac-drawing-wrap">
-    <svg viewBox={"0 0 " + width + " " + height} role="img" aria-label="散熱器入口截面示意圖">
+    <svg viewBox={"0 0 " + svgW + " " + svgH} role="img" aria-label="散熱器入口截面示意圖">
       <rect x={pad} y={pad} width={innerW} height={innerH} rx="3" fill="#172832" stroke="#8da1aa" strokeWidth="1.5"/>
       {Array.from({ length: count }, (_, i) => <rect key={i} x={start + i * (finW + gapW)} y={pad + 4} width={finW} height={innerH - 8} fill="#b8ef6b" opacity=".9"/>)}
       {Array.from({ length: 5 }, (_, i) => <g key={i} stroke="#83b9ca" strokeWidth="1.5" fill="none"><path d={"M " + (pad + 7 + i * (innerW / 5)) + " 8 v 10 m -4 -4 l 4 4 l 4 -4"}/></g>)}
       <path d={"M " + (pad + innerW / 2) + " 5 V 20"} stroke="#83b9ca" strokeWidth="1.5"/>
-      <text x={width / 2} y={height - 5} textAnchor="middle" fill="#9aabb3" fontSize="9">{"Airflow direction: " + axis}</text>
+      <text x={svgW / 2} y={svgH - 5} textAnchor="middle" fill="#9aabb3" fontSize="9">{"Airflow direction: " + axis}</text>
     </svg>
     <div className="ac-drawing-legend"><span><i className="ac-fin-key"/> Fin</span><span><i className="ac-gap-key"/> Fin Gap</span><span>入口截面非實際比例渲染</span></div>
+    <div className="ac-drawing-dimensions"><span>Inlet Face {fmt(faceWidth, 1)} × {fmt(faceHeight, 1)} mm</span><span>Fin T {fmt(result.finT, 2)} mm</span><span>Gap {fmt(result.gap, 2)} mm</span><span>Fin Qty {result.finCount}</span><span>Open Flow Area {fmt(openAreaMm2, 1)} mm²</span></div>
   </div>;
 }
-
 export default function AirCooling() {
   const [mode, setMode] = useState<"forward" | "inverse">("forward");
   const [objective, setObjective] = useState<Objective>("thermal");
@@ -168,8 +172,8 @@ export default function AirCooling() {
   const candidates = useMemo(() => {
     if (mode !== "inverse") return [];
     const auto = { finT: autoT, gap: autoGap, height: autoHeight, baseT: autoBase, finCount: autoCount, length: autoLength, width: autoWidth };
-    return makeCandidates(geometry, auto, process, envelopeMode === "limited", envelope);
-  }, [mode, length, width, height, baseT, finT, gap, finCount, autoT, autoGap, autoHeight, autoBase, autoCount, autoLength, autoWidth, process, envelopeMode, maxL, maxW, maxH]);
+    return makeCandidates(geometry, auto, process, envelopeMode === "limited", envelope, axis);
+  }, [mode, length, width, height, baseT, finT, gap, finCount, autoT, autoGap, autoHeight, autoBase, autoCount, autoLength, autoWidth, process, envelopeMode, maxL, maxW, maxH, axis]);
   const evaluated = useMemo(() => candidates.map(g => evaluate(g, inputParams)).filter((r): r is Result => !!r && r.dfm), [candidates, axis, power, tjMax, tin, cfm, lfm, airMode, rjc, rtim, dieL, dieW, baseK, finK, process]);
   const ranked = useMemo(() => {
     const pool = evaluated.filter(r => r.feasible);
@@ -243,9 +247,9 @@ export default function AirCooling() {
           <p className="ac-note">有空間限制時在 Envelope 內搜尋；無限制時先以 70–150 mm 的長寬候選範圍進行初步搜尋，並非無界搜尋。</p>
         </div>}
         <div className="ac-grid">
-          <Field label={mode === "inverse" ? "Length / Max Length" : "Heatsink Length"} value={length} unit="mm" onChange={setLength} disabled={mode === "inverse" && autoLength}/>
+          <Field label={mode === "inverse" ? "Length / Max Length" : "Heatsink Length"} value={length} unit="mm" onChange={setLength} disabled={mode === "inverse" && (axis === "Z" ? autoHeight : autoLength)}/>
           <Field label={mode === "inverse" ? "Width / Max Width" : "Heatsink Width"} value={width} unit="mm" onChange={setWidth} disabled={mode === "inverse" && autoWidth}/>
-          <Field label="Fin Height / Heatsink Height" value={height} unit="mm" onChange={setHeight} disabled={mode === "inverse" && autoHeight}/>
+          <Field label={axis === "Z" ? "Fin Height (X axis)" : "Fin Height / Heatsink Height"} value={height} unit="mm" onChange={setHeight} disabled={mode === "inverse" && autoHeight}/>
           <Choice label="Fin Manufacturing Process" value={process} onChange={v => setProcess(v as ProcessKey)} options={Object.entries(processes).map(([k, v]) => [k, v.label]) as [string, string][]}/>
         </div>
         <div className="ac-process-rule"><b>DFM 候選區間</b><span>Fin T {procRule.minT}–{procRule.maxT} mm</span><span>Gap {procRule.minGap}–{procRule.maxGap} mm</span><span>Height {procRule.minH}–{procRule.maxH} mm</span></div>
@@ -256,7 +260,7 @@ export default function AirCooling() {
           <div>{mode === "inverse" && <Toggle label="Fin Height" value={autoHeight} onChange={setAutoHeight}/>}<span className="ac-auto-caption">{mode === "inverse" && autoHeight ? "Height selected by search" : "Set in overall dimensions"}</span></div>
           <div>{mode === "inverse" && <Toggle label="Fin Quantity" value={autoCount} onChange={setAutoCount}/>}<Field label="Fin Quantity" value={finCount} unit="pcs" onChange={setFinCount} disabled={mode === "inverse" && autoCount}/></div>
           <div>{mode === "inverse" && <Toggle label="Base Thickness" value={autoBase} onChange={setAutoBase}/>}<Field label="Base Thickness" value={baseT} unit="mm" step={0.5} onChange={setBaseT} disabled={mode === "inverse" && autoBase}/></div>
-          {mode === "inverse" && <><div><Toggle label="Heatsink Length" value={autoLength} onChange={setAutoLength}/></div><div><Toggle label="Heatsink Width" value={autoWidth} onChange={setAutoWidth}/></div></>}
+          {mode === "inverse" && <><div>{axis !== "Z" && <Toggle label="Heatsink Length" value={autoLength} onChange={setAutoLength}/>}</div><div><Toggle label="Heatsink Width" value={autoWidth} onChange={setAutoWidth}/></div></>}
         </div>
         <p className="ac-note">Fin Pitch = Fin Thickness + Fin Gap。Fin Quantity 可手動指定或依可用寬度自動計算；自動搜尋僅在所選製程候選 DFM 區間內進行。</p>
       </div>
