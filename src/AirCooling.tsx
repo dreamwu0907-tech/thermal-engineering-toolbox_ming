@@ -157,7 +157,7 @@ export default function AirCooling() {
   const [length, setLength] = useState(100), [width, setWidth] = useState(100), [height, setHeight] = useState(40);
   const [baseT, setBaseT] = useState(5), [finT, setFinT] = useState(0.4), [gap, setGap] = useState(0.8), [finCount, setFinCount] = useState(70);
   const [autoT, setAutoT] = useState(true), [autoGap, setAutoGap] = useState(true), [autoHeight, setAutoHeight] = useState(true);
-  const [autoBase, setAutoBase] = useState(false), [autoCount, setAutoCount] = useState(true), [autoLength, setAutoLength] = useState(false), [autoWidth, setAutoWidth] = useState(false);
+  const [autoBase, setAutoBase] = useState(false), [autoCount, setAutoCount] = useState(true), [autoLength, setAutoLength] = useState(true), [autoWidth, setAutoWidth] = useState(true);
   const [process, setProcess] = useState<ProcessKey>("cu-skiving");
   const [baseMat, setBaseMat] = useState("c1100"), [finMat, setFinMat] = useState("c1100");
   const [baseCustomK, setBaseCustomK] = useState(200), [finCustomK, setFinCustomK] = useState(200);
@@ -285,7 +285,7 @@ export default function AirCooling() {
       <div className="ac-section-title"><div><small>05 / PERFORMANCE RESULTS</small><h2>熱性能與壓差結果</h2></div><span>ENGINEERING ESTIMATE</span></div>
       {!valid ? <div className="ac-alert">輸入條件無效。請確認功耗、溫度、Die / Package 尺寸、TIM 熱阻及風量皆合理，且 Package Size 不小於 Die Size。</div> : <>
         <div className="ac-card ac-budget">
-          <div className="ac-budget-item"><span>Thermal Budget Rtotal,max（以平均空氣溫度為基準）</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
+          <div className="ac-budget-item"><span>Thermal Budget Rtotal,max（依目前幾何平均空氣溫度）</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power, 4)} <small>K/W</small></b></div>
           <div className="ac-budget-item"><span>Rjc + R_TIM</span><b>{fmt(rjc + rtim, 4)} <small>K/W</small></b></div>
           <div className="ac-budget-item"><span>Available Heatsink Rth</span><b>{fmt((tjMax - (tin + result!.tout) / 2) / power - rjc - rtim, 4)} <small>K/W</small></b></div>
         </div>
